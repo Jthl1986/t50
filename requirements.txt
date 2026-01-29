@@ -1,3 +1,4 @@
+streamlit>=1.30.0
 feedparser
 lxml
 matplotlib
@@ -6,4 +7,4 @@ pandas
 plotly
 requests
 seaborn
-streamlit
+altair<5

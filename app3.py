@@ -1769,13 +1769,23 @@ def app5():
                 for cultivo in df_heatmap.index:
                     st.markdown(f"### {cultivo}")
                     
+                    cultivo_data = df_referencia[df_referencia['Cultivo'] == cultivo]
+                    
+                    if cultivo_data.empty:
+                        st.warning(f"No hay datos para {cultivo}")
+                        continue
+                    
+                    # Procesar cada combinación única de provincia-departamento para este cultivo
+                    for _, row in cultivo_data[['Provincia', 'Departamento']].drop_duplicates().iterrows():
+                        provincia = row['Provincia']
+                        departamento = row['Departamento']
+
                     # Procesar cada departamento seleccionado
                     for departamento in departamentos_seleccionados:
                         st.markdown(f"#### 📍 {departamento}")
                         
                         # Obtener datos históricos completos para este cultivo y departamento
-                        cultivo_csv = mapeo_cultivos_csv.get(cultivo, cultivo)
-                        filtro = (dfr['Provincia'] == st.session_state.provincia_seleccionada) & \
+                        filtro = (dfr['Provincia'] == provincia) & \
                                 (dfr['Departamento'] == departamento) & \
                                 (dfr['Cultivo'] == cultivo_csv)
                         df_hist = dfr[filtro].copy()

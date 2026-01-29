@@ -1771,7 +1771,7 @@ def app5():
                     
                     # Procesar cada departamento seleccionado
                     for departamento in departamentos_seleccionados:
-                        st.markdown(f"#### 📍 {departamento}")
+                        st.markdown(f"#### 📍 {deprtamento}")
                         
                         # Obtener datos históricos completos para este cultivo y departamento
                         cultivo_csv = mapeo_cultivos_csv.get(cultivo, cultivo)

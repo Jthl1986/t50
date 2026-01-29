@@ -1774,7 +1774,7 @@ def app5():
                         st.markdown(f"#### 📍 {departamento}")
                         
                         # Obtener datos históricos completos para este cultivo y departamento
-                        cultivo_csv = mapeo_cultivos_csv.get(st.session_state.tipo_cultivo_form, st.session_state.tipo_cultivo_form)
+                        cultivo_csv = mapeo_cultivos_csv.get(cultivo, cultivo)
                         filtro = (dfr['Provincia'] == st.session_state.provincia_seleccionada) & \
                                 (dfr['Departamento'] == departamento) & \
                                 (dfr['Cultivo'] == cultivo_csv)

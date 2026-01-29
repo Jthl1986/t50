@@ -1769,100 +1769,184 @@ def app5():
                 for cultivo in df_heatmap.index:
                     st.markdown(f"### {cultivo}")
                     
+                    # Usar el cultivo actual para mapeo
+                    cultivo_csv = mapeo_cultivos_csv.get(cultivo, cultivo)
+                    
+                    # Obtener datos del cultivo desde df_referencia
                     cultivo_data = df_referencia[df_referencia['Cultivo'] == cultivo]
                     
                     if cultivo_data.empty:
                         st.warning(f"No hay datos para {cultivo}")
                         continue
                     
-                    # Procesar cada combinación única de provincia-departamento para este cultivo
-                    for _, row in cultivo_data[['Provincia', 'Departamento']].drop_duplicates().iterrows():
-                        provincia = row['Provincia']
-                        departamento = row['Departamento']
-
-                    # Procesar cada departamento seleccionado
-                    for departamento in departamentos_seleccionados:
-                        st.markdown(f"#### 📍 {departamento}")
-                        
-                        # Obtener datos históricos completos para este cultivo y departamento
-                        filtro = (dfr['Provincia'] == provincia) & \
-                                (dfr['Departamento'] == departamento) & \
-                                (dfr['Cultivo'] == cultivo_csv)
-                        df_hist = dfr[filtro].copy()
-                        
-                        if not df_hist.empty and len(df_hist) >= 5:
+                    # Verificar si existe la columna Provincia en cultivo_data
+                    if 'Provincia' in cultivo_data.columns:
+                        # Si existe, usar provincia y departamento del DataFrame
+                        for _, row in cultivo_data[['Provincia', 'Departamento']].drop_duplicates().iterrows():
+                            provincia = row['Provincia']
+                            departamento = row['Departamento']
                             
+                            st.markdown(f"#### 📍 {departamento}, {provincia}")
                             
-                            # Convertir rendimientos a float y calcular percentiles
-                            rendimientos = df_hist['Rendimiento'].astype(float).values
+                            # Filtrar datos históricos
+                            filtro = (dfr['Provincia'] == provincia) & \
+                                    (dfr['Departamento'] == departamento) & \
+                                    (dfr['Cultivo'] == cultivo_csv)
+                            df_hist = dfr[filtro].copy()
                             
-                            p10 = np.percentile(rendimientos, 10)
-                            p25 = np.percentile(rendimientos, 25)
-                            p75 = np.percentile(rendimientos, 75)
-                            p90 = np.percentile(rendimientos, 90)
-                            
-                            # Crear lista de campañas con su escenario
-                            campañas_data = []
-                            for idx, row in df_hist.iterrows():
-                                rend = float(row['Rendimiento'])
-                                campaña = str(row['Campaña'])
+                            if not df_hist.empty and len(df_hist) >= 5:
+                                # Convertir rendimientos a float y calcular percentiles
+                                rendimientos = df_hist['Rendimiento'].astype(float).values
                                 
-                                # Clasificar en escenario
-                                if rend <= p10:
-                                    escenario = 'Muy Bajo'
-                                elif p10 < rend <= p25:
-                                    escenario = 'Bajo'
-                                elif p25 < rend <= p75:
-                                    escenario = 'Normal'
-                                elif p75 < rend <= p90:
-                                    escenario = 'Alto'
-                                else:
-                                    escenario = 'Muy Alto'
+                                p10 = np.percentile(rendimientos, 10)
+                                p25 = np.percentile(rendimientos, 25)
+                                p75 = np.percentile(rendimientos, 75)
+                                p90 = np.percentile(rendimientos, 90)
                                 
-                                campañas_data.append({
-                                    'Campaña': campaña,
-                                    'Rendimiento (kg/ha)': int(rend),
-                                    'Rendimiento (tn/ha)': round(rend/1000, 2),
-                                    'Escenario': escenario
+                                # Crear lista de campañas con su escenario
+                                campañas_data = []
+                                for idx, row_hist in df_hist.iterrows():
+                                    rend = float(row_hist['Rendimiento'])
+                                    campaña = str(row_hist['Campaña'])
+                                    
+                                    # Clasificar en escenario
+                                    if rend <= p10:
+                                        escenario = 'Muy Bajo'
+                                    elif p10 < rend <= p25:
+                                        escenario = 'Bajo'
+                                    elif p25 < rend <= p75:
+                                        escenario = 'Normal'
+                                    elif p75 < rend <= p90:
+                                        escenario = 'Alto'
+                                    else:
+                                        escenario = 'Muy Alto'
+                                    
+                                    campañas_data.append({
+                                        'Campaña': campaña,
+                                        'Rendimiento (kg/ha)': int(rend),
+                                        'Rendimiento (tn/ha)': round(rend/1000, 2),
+                                        'Escenario': escenario
+                                    })
+                                
+                                # Crear DataFrame y ordenar cronológicamente
+                                df_campañas = pd.DataFrame(campañas_data)
+                                df_campañas = df_campañas.sort_values('Campaña')
+                                
+                                # Función para aplicar color de fondo según escenario
+                                def color_escenario(row):
+                                    color = colores_escenarios.get(row['Escenario'], '#ffffff')
+                                    return [f'background-color: {color}; color: black' if col != 'Escenario' 
+                                        else f'background-color: {color}; color: black; font-weight: bold' 
+                                        for col in row.index]
+                                
+                                # Aplicar estilo y mostrar
+                                styled_df = df_campañas.style.apply(color_escenario, axis=1).format({
+                                    'Rendimiento (kg/ha)': '{:,.0f}',
+                                    'Rendimiento (tn/ha)': '{:.2f}'
                                 })
+                                
+                                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+                                
+                                # Resumen estadístico
+                                st.markdown("**Resumen por escenario:**")
+                                resumen_data = df_campañas.groupby('Escenario').agg({
+                                    'Campaña': 'count',
+                                    'Rendimiento (tn/ha)': ['min', 'max', 'mean']
+                                }).round(2)
+                                resumen_data.columns = ['Cantidad de años', 'Rinde mín (tn/ha)', 'Rinde máx (tn/ha)', 'Rinde prom (tn/ha)']
+                                
+                                # Ordenar por escenario
+                                orden_escenarios = ['Muy Bajo', 'Bajo', 'Normal', 'Alto', 'Muy Alto']
+                                resumen_data = resumen_data.reindex([e for e in orden_escenarios if e in resumen_data.index])
+                                
+                                st.dataframe(resumen_data, use_container_width=True)
+                                
+                            else:
+                                st.warning(f"No hay suficientes datos históricos para {cultivo} en {departamento}, {provincia}")
+                    else:
+                        # Si no existe columna Provincia, usar departamentos_seleccionados y provincia de session_state
+                        departamentos_cultivo = cultivo_data['Departamento'].unique()
+                        
+                        for departamento in departamentos_cultivo:
+                            st.markdown(f"#### 📍 {departamento}")
                             
-                            # Crear DataFrame y ordenar cronológicamente
-                            df_campañas = pd.DataFrame(campañas_data)
-                            df_campañas = df_campañas.sort_values('Campaña')
+                            # Usar provincia del session_state si existe
+                            if hasattr(st.session_state, 'provincia_seleccionada'):
+                                provincia = st.session_state.provincia_seleccionada
+                            else:
+                                st.warning(f"No se puede determinar la provincia para {departamento}")
+                                continue
                             
-                            # Función para aplicar color de fondo según escenario
-                            def color_escenario(row):
-                                color = colores_escenarios.get(row['Escenario'], '#ffffff')
-                                return [f'background-color: {color}; color: black' if col != 'Escenario' 
-                                    else f'background-color: {color}; color: black; font-weight: bold' 
-                                    for col in row.index]
+                            # Filtrar datos históricos
+                            filtro = (dfr['Provincia'] == provincia) & \
+                                    (dfr['Departamento'] == departamento) & \
+                                    (dfr['Cultivo'] == cultivo_csv)
+                            df_hist = dfr[filtro].copy()
                             
-                            # Aplicar estilo y mostrar
-                            styled_df = df_campañas.style.apply(color_escenario, axis=1).format({
-                                'Rendimiento (kg/ha)': '{:,.0f}',
-                                'Rendimiento (tn/ha)': '{:.2f}'
-                            })
-                            
-                            st.dataframe(styled_df, hide_index=True, use_container_width=True)
-                            
-                            # Resumen estadístico
-                            st.markdown("**Resumen por escenario:**")
-                            resumen_data = df_campañas.groupby('Escenario').agg({
-                                'Campaña': 'count',
-                                'Rendimiento (tn/ha)': ['min', 'max', 'mean']
-                            }).round(2)
-                            resumen_data.columns = ['Cantidad de años', 'Rinde mín (tn/ha)', 'Rinde máx (tn/ha)', 'Rinde prom (tn/ha)']
-                            
-                            # Ordenar por escenario
-                            orden_escenarios = ['Muy Bajo', 'Bajo', 'Normal', 'Alto', 'Muy Alto']
-                            resumen_data = resumen_data.reindex([e for e in orden_escenarios if e in resumen_data.index])
-                            
-                            st.dataframe(resumen_data, use_container_width=True)
-                            
-                        else:
-                            st.warning(f"No hay suficientes datos históricos para {cultivo} en {departamento}")
-                    
-                    st.markdown("---")
+                            if not df_hist.empty and len(df_hist) >= 5:
+                                # ... mismo código de procesamiento que arriba ...
+                                rendimientos = df_hist['Rendimiento'].astype(float).values
+                                
+                                p10 = np.percentile(rendimientos, 10)
+                                p25 = np.percentile(rendimientos, 25)
+                                p75 = np.percentile(rendimientos, 75)
+                                p90 = np.percentile(rendimientos, 90)
+                                
+                                campañas_data = []
+                                for idx, row_hist in df_hist.iterrows():
+                                    rend = float(row_hist['Rendimiento'])
+                                    campaña = str(row_hist['Campaña'])
+                                    
+                                    if rend <= p10:
+                                        escenario = 'Muy Bajo'
+                                    elif p10 < rend <= p25:
+                                        escenario = 'Bajo'
+                                    elif p25 < rend <= p75:
+                                        escenario = 'Normal'
+                                    elif p75 < rend <= p90:
+                                        escenario = 'Alto'
+                                    else:
+                                        escenario = 'Muy Alto'
+                                    
+                                    campañas_data.append({
+                                        'Campaña': campaña,
+                                        'Rendimiento (kg/ha)': int(rend),
+                                        'Rendimiento (tn/ha)': round(rend/1000, 2),
+                                        'Escenario': escenario
+                                    })
+                                
+                                df_campañas = pd.DataFrame(campañas_data)
+                                df_campañas = df_campañas.sort_values('Campaña')
+                                
+                                def color_escenario(row):
+                                    color = colores_escenarios.get(row['Escenario'], '#ffffff')
+                                    return [f'background-color: {color}; color: black' if col != 'Escenario' 
+                                        else f'background-color: {color}; color: black; font-weight: bold' 
+                                        for col in row.index]
+                                
+                                styled_df = df_campañas.style.apply(color_escenario, axis=1).format({
+                                    'Rendimiento (kg/ha)': '{:,.0f}',
+                                    'Rendimiento (tn/ha)': '{:.2f}'
+                                })
+                                
+                                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+                                
+                                st.markdown("**Resumen por escenario:**")
+                                resumen_data = df_campañas.groupby('Escenario').agg({
+                                    'Campaña': 'count',
+                                    'Rendimiento (tn/ha)': ['min', 'max', 'mean']
+                                }).round(2)
+                                resumen_data.columns = ['Cantidad de años', 'Rinde mín (tn/ha)', 'Rinde máx (tn/ha)', 'Rinde prom (tn/ha)']
+                                
+                                orden_escenarios = ['Muy Bajo', 'Bajo', 'Normal', 'Alto', 'Muy Alto']
+                                resumen_data = resumen_data.reindex([e for e in orden_escenarios if e in resumen_data.index])
+                                
+                                st.dataframe(resumen_data, use_container_width=True)
+                                
+                            else:
+                                st.warning(f"No hay suficientes datos históricos para {cultivo} en {departamento}")
+                                
+                                st.markdown("---")
                         
         st.write(f"**Aclaraciones del cálculo:** Los rindes utilizados para la proyección corresponden a los promedios históricos por localidad para las últimas campañas (desde 2013/2014 a 2024/2025) segmentadas por percentiles para la determinación de escenarios. Los gastos de arrendamiento y estructura fueron estimados según datos proporcionados por SAGYP")
         

@@ -26,6 +26,30 @@ footer {visibility: hidden;}
 """
 st.markdown(hide_github_link, unsafe_allow_html=True)
 
+def layout_centrado():
+    st.markdown("""
+        <style>
+            /* Apuntamos al contenedor principal */
+            .main .block-container {
+                max-width: 800px !important;
+                /* Agregamos padding arriba para que no se "coma" el contenido */
+                padding-top: 5rem !important; 
+                padding-bottom: 5rem !important;
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+            }
+
+            /* Esto asegura que el header de Streamlit (donde está el menú) 
+               no tape el título de tu app */
+            [data-testid="stHeader"] {
+                background: rgba(0,0,0,0);
+                color: white;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
 #PARA ABRIR GOOGLEMAPS
 def abrir_google_maps():
     # Coordenadas de ejemplo (puedes cambiarlas por las que necesites)
@@ -198,7 +222,7 @@ if response.status_code == 200:
             valores_rosario["pp" + cultivo] = float(valor_rosario)
 
 # Extraer la fecha
-fecha1 = pizarra_data["fecha"] #"11/04/2024" #   Sacar fecha y numeral y tabular
+fecha1 = "11/04/2024" #pizarra_data["fecha"]#  #   Sacar fecha y numeral y tabular
 
 # Asignar los valores a las variables con los nombres personalizados
 pptrigo = valores_rosario["pptrigo"]    
@@ -1308,6 +1332,13 @@ def app4():
     if submit2:
         st.session_state.aparceria_value = aparceria_input
         st.session_state.df1 = [arrendamiento, gast, aparceria]
+        
+        # AGREGAR ESTAS LÍNEAS:
+        st.session_state.dol = dol  # Guardar valor del dólar
+        st.session_state.region = region  # Guardar región seleccionada
+        
+        # Guardar las funciones de obtención como diccionarios
+        st.session_state.gasvar_dict = gasvar_por_region_cultivo
     
 
 def app9():
@@ -1380,6 +1411,8 @@ def app9():
     st.markdown(f"**[Informes ROSGAN]({rosgan_link})**")
         
 def app5():
+
+    layout_centrado()
     left, right = st.columns(2)
     css()
    
@@ -1483,83 +1516,112 @@ def app5():
 
         margenb = mbtotal/ingtotal
         margenb_porcentaje = "{:.0%}".format(margenb)
-        costototal = "${:,.0f}".format(costtotal)
+        costototal = "${:,.1f}MM".format(costtotal/1000000)
         margenn = result/ingtotal
         margenn_porcentaje = "{:.0%}".format(margenn)
-        granos = "${:,.0f}".format(valuacion_total)
+        granos = "${:,.1f}MM".format(valuacion_total/1000000)
 
         col1, col2, col3, col4 = st.columns(4)  
         
         col1.metric(label="Superficie has (con rotación)", value=df_referencia["Superficie (has)"].sum())
-        col2.metric(label="Arrendamiento", value='${:,}'.format(arrend))
+        col2.metric(label="Arrendamiento", value ='${:.1f}MM'.format(arrend/1000000))
         col3.metric(label="Costo directo", value=costototal)
         col4.metric(label="Tenencia de granos", value= granos)
 
         # MOSTRAR TABLA COMPARATIVA DE LOS 5 ESCENARIOS
         if hay_escenarios:
-            # Crear tabla comparativa
-            st.markdown("### 📊 Comparativa de Escenarios")
-            
-            # Calcular totales para cada escenario
-            escenarios_data = []
-            
-            for nombre_escenario, df_escenario in [
-                ("Muy Bajo (P10)", dfp_muy_bajo), 
-                ("Bajo (P10-P25)", dfp_bajo), 
-                ("Normal (P25-P75)", dfp_normal), 
-                ("Alto (P75-P90)", dfp_alto),
-                ("Muy Alto (P90+)", dfp_muy_alto)
-            ]:
-                if df_escenario is not None and not df_escenario.empty:
-                    ingtotal_esc = df_escenario['Ingreso'].sum()
-                    costtotal_esc = df_escenario['Costos directos'].sum()
-                    gctotal_esc = df_escenario['Gastos comercialización'].sum()
-                    mbtotal_esc = df_escenario['Margen bruto'].sum()
-                    
-                    if df1 is not None:
-                        arrend = st.session_state.df1[0]
-                        gas = st.session_state.df1[1]
-                        result_esc = int(mbtotal_esc)-int(arrend)-int(gas)
-                        result_net = (result_esc/ingtotal_esc)*100
-                    else:
-                        arrend = 0
-                        gas = 0
-                        result_esc = mbtotal_esc
-                    
-                    escenarios_data.append({
-                        'Escenario': nombre_escenario,
-                        'Ingreso Total': ingtotal_esc,
-                        'Costos Directos': costtotal_esc,
-                        'Gastos Comercialización': gctotal_esc,
-                        'Margen Bruto': mbtotal_esc,
-                        'Arrendamiento': arrend,
-                        'Gastos Estructura': gas,
-                        'Resultado Final': result_esc,
-                        'Margen neto': result_net
-                    })
-            
-            if escenarios_data:
-                df_comparativa = pd.DataFrame(escenarios_data)
-                
-                # Formatear la tabla
-                st.dataframe(df_comparativa.style.format({
-                    'Ingreso Total': '${:,.0f}',
-                    'Costos Directos': '${:,.0f}',
-                    'Gastos Comercialización': '${:,.0f}',
-                    'Margen Bruto': '${:,.0f}',
-                    'Arrendamiento': '${:,.0f}',
-                    'Gastos Estructura': '${:,.0f}',
-                    'Resultado Final': '${:,.0f}',
-                    'Margen neto': '{:.1f}%'
-                }),
-                hide_index=True)
-                
-            # AGREGAR HEATMAP CON RESULTADO FINAL (NETO) Y AÑOS DE CAMPAÑA
-            st.markdown("### 🔥 Heatmap de Resultado Final por Escenario y Cultivo")
+            # AGREGAR HEATMAP CON RESULTADO FINAL POR ESCENARIO DE RINDE Y PRECIO
+            st.markdown("### 📊 Matriz de Resultado Final: Escenarios de Rinde × Precio")
 
-            # Preparar datos para el heatmap
-            heatmap_data = []
-            escenarios_list = [
+            # Obtener dólar desde session_state
+            dol = getattr(st.session_state, 'dol', 1401)
+
+            # Definir función local de obtener_gasvar
+            def obtener_gasvar_local(cultivo, df_row):
+                """Obtiene el % de gastos de comercialización desde los datos ya calculados"""
+                if df_row['Ingreso'] > 0:
+                    return df_row['Gastos comercialización'] / df_row['Ingreso']
+                else:
+                    return 0.05  # 5% por defecto
+
+            # Definir escenarios de precio (variación de ±15% respecto a precio base)
+            escenarios_precio = {
+                'Bajo (-15%)': {
+                    'Trigo': 190 * 0.85,
+                    'Soja 1ra': 300 * 0.85,
+                    'Soja 2da': 300 * 0.85,
+                    'Maíz': 175 * 0.85,
+                    'Cebada': 165 * 0.85,
+                    'Girasol': 330 * 0.85,
+                    'Sorgo': 160 * 0.85
+                },
+                'Normal': {
+                    'Trigo': 190,
+                    'Soja 1ra': 300,
+                    'Soja 2da': 300,
+                    'Maíz': 175,
+                    'Cebada': 165,
+                    'Girasol': 330,
+                    'Sorgo': 160
+                },
+                'Alto (+15%)': {
+                    'Trigo': 190 * 1.15,
+                    'Soja 1ra': 300 * 1.15,
+                    'Soja 2da': 300 * 1.15,
+                    'Maíz': 175 * 1.15,
+                    'Cebada': 165 * 1.15,
+                    'Girasol': 330 * 1.15,
+                    'Sorgo': 160 * 1.15
+                }
+            }
+
+            # Función para recalcular resultado con nuevos precios
+            def calcular_resultado_con_precio(df_escenario, precios_dict, arrend, gas):
+                """
+                Recalcula el resultado final de un escenario con nuevos precios
+                Retorna: (resultado_final_millones, ingreso_total, margen_rentabilidad%)
+                """
+                ingreso_total = 0
+                costo_total = 0
+                gc_total = 0
+                
+                for idx, row in df_escenario.iterrows():
+                    cultivo = row['Cultivo']
+                    superficie = row['Superficie (has)']
+                    rinde = row['Rinde']
+                    
+                    # Obtener nuevo precio
+                    precio_nuevo = precios_dict.get(cultivo, 0)
+                    
+                    # Recalcular con aparcería si aplica
+                    if row['Campos     '].strip() == "Aparcería":
+                        aparceria = st.session_state.df1[2] if len(st.session_state.df1) > 2 else 0.6
+                        ingreso = precio_nuevo * dol * rinde * superficie * aparceria
+                        costo = row['Costos directos']  # Ya está ajustado por aparcería
+                    else:
+                        ingreso = precio_nuevo * dol * rinde * superficie
+                        costo = row['Costos directos']
+                    
+                    # Gastos de comercialización (usar el % ya calculado)
+                    gasto_pct = obtener_gasvar_local(cultivo, row)
+                    gc = gasto_pct * ingreso
+                    
+                    ingreso_total += ingreso
+                    costo_total += costo
+                    gc_total += gc
+                
+                margen_bruto_total = ingreso_total - costo_total - gc_total
+                
+                # Descontar arrendamiento y gastos de estructura
+                resultado_final = margen_bruto_total - arrend - gas
+                
+                # Calcular margen de rentabilidad (resultado/ingreso * 100)
+                margen_rentabilidad = (resultado_final / ingreso_total * 100) if ingreso_total > 0 else 0
+                
+                return resultado_final / 1_000_000, ingreso_total / 1_000_000, margen_rentabilidad
+
+            # Preparar datos para el heatmap (5 rindes × 3 precios)
+            escenarios_rinde = [
                 ("Muy Bajo", dfp_muy_bajo),
                 ("Bajo", dfp_bajo),
                 ("Normal", dfp_normal),
@@ -1567,216 +1629,193 @@ def app5():
                 ("Muy Alto", dfp_muy_alto)
             ]
 
-            # Obtener lista única de cultivos
-            cultivos = df_referencia['Cultivo'].unique()
+            heatmap_data = []
+            hover_data = []
 
-            # Cargar datos históricos para mapear años a escenarios
-            url = "https://raw.githubusercontent.com/Jthl1986/T1/main/Estimaciones8.csv"
-            dfr = pd.read_csv(url, encoding='ISO-8859-1', sep=',')
-
-            for cultivo in cultivos:
-                fila = {'Cultivo': cultivo}
-                
-                for escenario_nombre, df_escenario in escenarios_list:
-                    if df_escenario is not None and not df_escenario.empty:
-                        cultivo_data = df_escenario[df_escenario['Cultivo'] == cultivo]
-                        if not cultivo_data.empty:
-                            # Obtener totales del escenario completo para calcular proporción
-                            ingreso_total_escenario = df_escenario['Ingreso'].sum()
-                            margen_total_escenario = df_escenario['Margen bruto'].sum()
-                            
-                            # Calcular margen bruto del cultivo
-                            margen_cultivo = cultivo_data['Margen bruto'].sum()
-                            superficie = cultivo_data['Superficie (has)'].sum()
-                            
-                            # Calcular resultado final total del escenario
-                            resultado_final_total = margen_total_escenario - arrend - gas
-                            
-                            # Calcular proporción del cultivo en el resultado final
-                            if margen_total_escenario > 0:
-                                proporcion_cultivo = margen_cultivo / margen_total_escenario
-                            else:
-                                proporcion_cultivo = 0
-                            
-                            # Asignar resultado final proporcionalmente
-                            resultado_final_cultivo = resultado_final_total * proporcion_cultivo
-                            
-                            if superficie > 0:
-                                resultado_ha = resultado_final_cultivo 
-                                fila[escenario_nombre] = resultado_ha
-                            else:
-                                fila[escenario_nombre] = 0
-                        else:
-                            fila[escenario_nombre] = 0
-                
-                heatmap_data.append(fila)
-
-            df_heatmap = pd.DataFrame(heatmap_data)
-            df_heatmap = df_heatmap.set_index('Cultivo')
-
-            # NUEVA FUNCIÓN: Obtener años que corresponden a cada escenario para MÚLTIPLES departamentos
-            def obtener_años_escenario_multi(cultivo, dfr, df_referencia):
-                """
-                Retorna un diccionario con los años de campaña que corresponden a cada escenario
-                considerando TODOS los departamentos donde se cultivó este cultivo
-                """
-                mapeo_cultivos_csv = {
-                    "Trigo": "Trigo total",
-                    "Maíz": "Maíz",
-                    "Soja 1ra": "Soja 1ra",
-                    "Soja 2da": "Soja 2da",
-                    "Girasol": "Girasol",
-                    "Sorgo": "Sorgo",
-                    "Cebada": "Cebada"
-                }
-
-                cultivo_csv = mapeo_cultivos_csv.get(cultivo, cultivo)
-                años_por_escenario = {
-                    'Muy Bajo': {},
-                    'Bajo': {},
-                    'Normal': {},
-                    'Alto': {},
-                    'Muy Alto': {}
-                }
-
-                # Obtener TODOS los departamentos donde se cultivó este cultivo
-                cultivo_data = df_referencia[df_referencia['Cultivo'] == cultivo]
-                
-                if cultivo_data.empty:
-                    return años_por_escenario
-                
-                # Obtener departamentos únicos
-                departamentos_cultivo = cultivo_data['Departamento'].unique()
-                
-                # Procesar cada departamento
-                for departamento in departamentos_cultivo:
-                    # Obtener provincia para este departamento
-                    if 'Provincia' in cultivo_data.columns:
-                        provincia = cultivo_data[cultivo_data['Departamento'] == departamento]['Provincia'].iloc[0]
-                    else:
-                        # Fallback a session_state
-                        if hasattr(st.session_state, 'provincia_seleccionada'):
-                            provincia = st.session_state.provincia_seleccionada
-                        else:
-                            continue
-                    
-                    # Filtrar datos históricos para este departamento específico
-                    filtro = (dfr['Provincia'] == provincia) & \
-                            (dfr['Departamento'] == departamento) & \
-                            (dfr['Cultivo'] == cultivo_csv)
-                    df_hist = dfr[filtro].copy()
-                    
-                    if df_hist.empty or len(df_hist) < 5:
-                        continue
-                    
-                    # Convertir rendimientos a float
-                    rendimientos = df_hist['Rendimiento'].astype(float).values
-                    campañas = df_hist['Campaña'].values
-                    
-                    # Calcular percentiles para este departamento
-                    p10 = np.percentile(rendimientos, 10)
-                    p25 = np.percentile(rendimientos, 25)
-                    p75 = np.percentile(rendimientos, 75)
-                    p90 = np.percentile(rendimientos, 90)
-                    
-                    # Clasificar cada año en su escenario
-                    for i, rend in enumerate(rendimientos):
-                        campaña = str(campañas[i])
-                        
-                        if rend <= p10:
-                            escenario = 'Muy Bajo'
-                        elif p10 < rend <= p25:
-                            escenario = 'Bajo'
-                        elif p25 < rend <= p75:
-                            escenario = 'Normal'
-                        elif p75 < rend <= p90:
-                            escenario = 'Alto'
-                        else:
-                            escenario = 'Muy Alto'
-                        
-                        # Almacenar por departamento
-                        if departamento not in años_por_escenario[escenario]:
-                            años_por_escenario[escenario][departamento] = []
-                        años_por_escenario[escenario][departamento].append(campaña)
-                
-                return años_por_escenario
-
-            # Obtener todos los departamentos únicos de los DataFrames de escenarios
-            departamentos_seleccionados = []
-            for _, df_escenario in escenarios_list:
-                if df_escenario is not None and not df_escenario.empty and 'Departamento' in df_escenario.columns:
-                    departamentos_seleccionados.extend(df_escenario['Departamento'].unique().tolist())
-
-            # Eliminar duplicados y mantener orden
-            departamentos_seleccionados = list(dict.fromkeys(departamentos_seleccionados))
-
-            # Si no se encontraron departamentos en los escenarios, usar el de session_state
-            if not departamentos_seleccionados:
-                if hasattr(st.session_state, 'departamento_seleccionado'):
-                    departamentos_seleccionados = [st.session_state.departamento_seleccionado]
-                else:
-                    departamentos_seleccionados = []
-
-            # Crear texto personalizado para el heatmap con años
-            customdata = []
-            hover_text = []
-
-            for cultivo in df_heatmap.index:
-                fila_custom = []
+            # CAMBIO: Iterar primero por precios (filas) y luego por rindes (columnas)
+            for nombre_precio, precios in escenarios_precio.items():
+                fila_valores = []
                 fila_hover = []
                 
-                # Obtener años para este cultivo en TODOS los departamentos
-                # CAMBIO: Pasar df_referencia en lugar de lista de departamentos
-                años_dict = obtener_años_escenario_multi(cultivo, dfr, df_referencia)
+                for nombre_rinde, df_rinde in escenarios_rinde:
+                    if df_rinde is None or df_rinde.empty:
+                        continue
+                    
+                    # Calcular resultado para esta combinación
+                    resultado_millones, ingreso_millones, margen_rentabilidad = calcular_resultado_con_precio(
+                        df_rinde, 
+                        precios, 
+                        arrend, 
+                        gas
+                    )
+                    
+                    fila_valores.append(resultado_millones)
+                    
+                    # Crear texto hover detallado
+                    hover_text = f"<b>Precio: {nombre_precio}</b><br>"
+                    hover_text += f"<b>Rinde: {nombre_rinde}</b><br><br>"
+                    hover_text += f"<b>Resultado Final:</b> ${resultado_millones:,.2f}M<br>"
+                    hover_text += f"<b>Margen Rentabilidad:</b> {margen_rentabilidad:+.1f}%<br>"
+                    hover_text += f"<b>Ingreso Total:</b> ${ingreso_millones:,.2f}M<br><br>"
+                    hover_text += "<b>Precios aplicados:</b><br>"
+                    for cultivo, precio in precios.items():
+                        hover_text += f"  • {cultivo}: u$s{precio:.0f}/tn<br>"
+                    
+                    fila_hover.append(hover_text)
                 
-                for escenario in df_heatmap.columns:
-                    valor = df_heatmap.loc[cultivo, escenario]
-                    
-                    # Obtener años de este escenario por departamento
-                    años_por_dept = años_dict.get(escenario, {})
-                    
-                    if años_por_dept:
-                        # Construir texto con años organizados por departamento
-                        texto_depts = []
-                        for dept, años in años_por_dept.items():
-                            años_unicos = sorted(set(años))
-                            texto_depts.append(f"{dept}: {', '.join(años_unicos)}")
-                        
-                        años_str = "<br>".join(texto_depts)
-                        texto_hover = f"{escenario}<br>Resultado: ${valor:,.0f}MM<br><b>Años por departamento:</b><br>{años_str}"
-                    else:
-                        texto_hover = f"{escenario}<br>Resultado: ${valor:,.0f}MM<br>Sin datos históricos"
-                    
-                    fila_custom.append(años_por_dept)
-                    fila_hover.append(texto_hover)
-                
-                customdata.append(fila_custom)
-                hover_text.append(fila_hover)
+                heatmap_data.append(fila_valores)
+                hover_data.append(fila_hover)
 
-            # Crear el heatmap con plotly (Resultado Final en $/ha)
+            # Crear DataFrame para el heatmap (TRANSPUESTO)
+
+            df_heatmap_matriz = pd.DataFrame(
+                heatmap_data,
+                index=list(escenarios_precio.keys()),  # Precios en filas (eje Y)
+                columns=[nombre for nombre, _ in escenarios_rinde if _ is not None and not _.empty]  # Rindes en columnas (eje X)
+            )
+
+            # Calcular también los márgenes para mostrar en el heatmap
+            margenes_data = []
+            for nombre_precio, precios in escenarios_precio.items():
+                fila_margenes = []
+                for nombre_rinde, df_rinde in escenarios_rinde:
+                    if df_rinde is None or df_rinde.empty:
+                        continue
+                    _, _, margen = calcular_resultado_con_precio(df_rinde, precios, arrend, gas)
+                    fila_margenes.append(margen)
+                margenes_data.append(fila_margenes)
+
+            df_margenes = pd.DataFrame(
+                margenes_data,
+                index=df_heatmap_matriz.index,
+                columns=df_heatmap_matriz.columns
+            )
+
+            # CREAR ESCALA DE COLORES CENTRADA EN CERO
+            valores = df_heatmap_matriz.values.flatten()
+            valor_max = np.max(np.abs(valores))
+
+            # Escala de colores divergente centrada en cero (Opción 4 - Minimalista Elegante)
+            colorscale = [
+                [0.0, '#C62828'],    # Rojo intenso (muy negativo)
+                [0.25, '#E57373'],   # Rojo claro
+                [0.4, '#FFCDD2'],    # Rosa muy claro
+                [0.475, '#F5F5F5'],  # Gris muy claro
+                [0.5, '#FAFAFA'],    # Casi blanco (cero)
+                [0.525, '#FAFAFA'],  # Casi blanco (cero)
+                [0.55, '#E8F5E9'],   # Verde casi blanco
+                [0.65, '#81C784'],   # Verde suave
+                [0.8, '#4CAF50'],    # Verde material
+                [1.0, '#388E3C']     # Verde oscuro (muy positivo)
+            ]
+
+            # Crear anotaciones para mostrar resultado y margen en cada celda
+            annotations = []
+            for i, y_label in enumerate(df_heatmap_matriz.index):
+                for j, x_label in enumerate(df_heatmap_matriz.columns):
+                    resultado = df_heatmap_matriz.iloc[i, j]
+                    margen = df_margenes.iloc[i, j]
+                    
+                    # Texto a mostrar: resultado en la primera línea, margen en la segunda
+                    texto = f"<b>${resultado:,.1f}MM</b><br>{margen:+.1f}%"
+                    
+                    annotations.append(
+                        dict(
+                            x=x_label,
+                            y=y_label,
+                            text=texto,
+                            showarrow=False,
+                            font=dict(
+                                size=13,
+                                color='black',
+                                family='Arial, sans-serif'
+                            ),
+                            xref='x',
+                            yref='y'
+                        )
+                    )
+
+            # Crear el heatmap con plotly
             fig_heatmap = go.Figure(data=go.Heatmap(
-                z=df_heatmap.values,
-                x=df_heatmap.columns,
-                y=df_heatmap.index,
-                colorscale='RdYlGn',
-                text=df_heatmap.values,
-                texttemplate='$%{text:,.0f}MM',
-                textfont={"size": 12},
-                colorbar=dict(title="$MM"),
-                hovertext=hover_text,
+                z=df_heatmap_matriz.values,
+                x=df_heatmap_matriz.columns,  # Rindes en X
+                y=df_heatmap_matriz.index,     # Precios en Y
+                colorscale=colorscale,
+                zmid=0,  # Centrar la escala en cero
+                hovertext=hover_data,
                 hoverinfo='text',
-                customdata=customdata
+                showscale=True,
+                colorbar=dict(
+                    title="Resultado<br>($MM)",
+                    tickformat="$,.0f",
+                    ticksuffix="MM",
+                    len=0.7
+                )
             ))
 
             fig_heatmap.update_layout(
-                title="Resultado Final (Neto) por Escenario (en millones)<br><sub>Con indicaciones de campañas que han entrado en dichos escenarios por localidad</sub>",
-                xaxis_title="Escenario",
-                yaxis_title="Cultivo",
-                height=400 + (len(cultivos) * 30)
+                annotations=annotations,  # Agregar las anotaciones
+                xaxis_title="<b>Escenario de Rinde</b>",  # CAMBIO: Ahora es Rinde
+                yaxis_title="<b>Escenario de Precio</b>",  # CAMBIO: Ahora es Precio
+                xaxis=dict(
+                    side='top',  # Etiquetas de rinde arriba
+                    tickfont=dict(size=12, color='black'),
+                    title_standoff=10
+                ),
+                yaxis=dict(
+                    tickfont=dict(size=12, color='black')
+                ),
+                height=400,  # Reducido porque ahora hay menos filas
+                font=dict(size=12),
+                margin=dict(t=50, b=0, l=100, r=100)
             )
 
             st.plotly_chart(fig_heatmap, use_container_width=True)
 
+            # Estadísticas rápidas
+            st.markdown("---")
+            col1, col2, col3 = st.columns(3)
+
+            # Encontrar índices del mejor y peor resultado
+            mejor_idx = np.unravel_index(df_heatmap_matriz.values.argmax(), df_heatmap_matriz.shape)
+            peor_idx = np.unravel_index(df_heatmap_matriz.values.argmin(), df_heatmap_matriz.shape)
+
+            # Extraer los valores de Resultado Final (MM)
+            mejor_valor = df_heatmap_matriz.values[mejor_idx]
+            peor_valor = df_heatmap_matriz.values[peor_idx]
+
+            # Extraer los márgenes correspondientes de la matriz df_margenes
+            # Usamos los mismos índices (mejor_idx/peor_idx) ya que ambas tablas tienen la misma forma
+            mejor_margen = df_margenes.values[mejor_idx]
+            peor_margen = df_margenes.values[peor_idx]
+
+            # Cálculos para la tercera métrica
+            valores_positivos = df_heatmap_matriz.values[df_heatmap_matriz.values > 0]
+            escenarios_positivos = len(valores_positivos)
+            total_escenarios = df_heatmap_matriz.size
+
+            # Mostrar Métricas
+            # En 'delta' ponemos el margen de rentabilidad formateado
+            col1.metric(
+                label="Mejor Escenario", 
+                value=f"${mejor_valor:,.1f}MM", 
+                delta=f"{mejor_margen:+.1f}% Margen"
+            )
+
+            col2.metric(
+                label="Peor Escenario", 
+                value=f"${peor_valor:,.1f}MM", 
+                delta=f"{peor_margen:+.1f}% Margen",
+                delta_color="normal" # "normal" mantiene el rojo si es negativo
+            )
+
+            col3.metric(
+                label="Escenarios Positivos", 
+                value=f"{escenarios_positivos}/{total_escenarios}", 
+                delta=f"{escenarios_positivos/total_escenarios*100:.0f}% del total",
+                delta_color="off" # Desactiva el color verde/rojo para esta métrica
+            )
+            
             mapeo_cultivos_csv = {
             "Trigo": "Trigo total",
             "Maíz": "Maíz",
@@ -1787,135 +1826,293 @@ def app5():
             "Cebada": "Cebada"}
 
             # AGREGAR TABLA RESUMEN DE AÑOS POR ESCENARIO
-            with st.expander("📅 Ver detalle de años por escenario, cultivo y departamento"):
-                st.markdown("**Años de campaña históricos clasificados por escenario de rendimiento:**")
-                st.markdown("*Las campañas están ordenadas cronológicamente y coloreadas según su escenario*")
+            with st.expander("📅 Ver rindes históricos por campaña, departamento y cultivo"):
+                st.markdown("**Rindes históricos de las últimas campañas (en toneladas/ha)**")
+                st.markdown("*Las celdas están coloreadas según el escenario de rendimiento para cada cultivo y departamento*")
                 
-                # Definir colores para cada escenario
+                # Definir colores para cada escenario (misma paleta del heatmap)
                 colores_escenarios = {
-                    'Muy Bajo': '#d73027',      # Rojo
-                    'Bajo': '#fc8d59',          # Naranja
-                    'Normal': '#fee08b',        # Amarillo
-                    'Alto': '#91cf60',          # Verde claro
-                    'Muy Alto': '#1a9850'       # Verde oscuro
+                    'Muy Bajo': '#C62828',
+                    'Bajo': '#E57373',
+                    'Normal': '#C5E1A5',
+                    'Alto': '#4CAF50',
+                    'Muy Alto': '#388E3C'
                 }
                 
-                for cultivo in df_heatmap.index:
-                    st.markdown(f"### {cultivo}")
+                # Mapeo de cultivos
+                mapeo_cultivos_csv = {
+                    "Trigo": "Trigo total",
+                    "Maíz": "Maíz",
+                    "Soja 1ra": "Soja 1ra",
+                    "Soja 2da": "Soja 2da",
+                    "Girasol": "Girasol",
+                    "Sorgo": "Sorgo",
+                    "Cebada": "Cebada"
+                }
+                
+                # Cargar datos históricos
+                url = "https://raw.githubusercontent.com/Jthl1986/T1/main/Estimaciones8.csv"
+                dfr = pd.read_csv(url, encoding='ISO-8859-1', sep=',')
+                
+                # Obtener todos los departamentos únicos del planteo
+                if df_referencia is not None and not df_referencia.empty:
+                    departamentos_unicos = df_referencia['Departamento'].unique()
                     
-                    # Usar el cultivo actual para mapeo
-                    cultivo_csv = mapeo_cultivos_csv.get(cultivo, cultivo)
+                    # Crear estructura para almacenar todos los datos
+                    datos_completos = []
+                    columnas_nombres = []  # Cambio: usaremos nombres simples en lugar de tuplas
                     
-                    # CAMBIO IMPORTANTE: Obtener TODOS los departamentos donde se cultivó este cultivo
-                    # Usar df_referencia que es dfp_normal o dfp según disponibilidad
-                    cultivo_data = df_referencia[df_referencia['Cultivo'] == cultivo]
-                    
-                    if cultivo_data.empty:
-                        st.warning(f"No hay datos para {cultivo}")
-                        continue
-                    
-                    # CORRECCIÓN PRINCIPAL: Obtener TODOS los departamentos únicos para este cultivo
-                    departamentos_cultivo = cultivo_data['Departamento'].unique()
-                    
-                    # Procesar cada departamento
-                    for departamento in departamentos_cultivo:
-                        st.markdown(f"#### 📍 {departamento}")
-                        
-                        # Obtener la provincia (puede variar según departamento)
-                        if 'Provincia' in cultivo_data.columns:
-                            # Si existe columna Provincia, usarla
-                            provincia = cultivo_data[cultivo_data['Departamento'] == departamento]['Provincia'].iloc[0]
+                    # Iterar por cada departamento
+                    for departamento in sorted(departamentos_unicos):
+                        # Obtener provincia para este departamento
+                        if 'Provincia' in df_referencia.columns:
+                            provincia = df_referencia[df_referencia['Departamento'] == departamento]['Provincia'].iloc[0]
                         else:
-                            # Si no existe, usar session_state
-                            if hasattr(st.session_state, 'provincia_seleccionada'):
-                                provincia = st.session_state.provincia_seleccionada
+                            provincia = getattr(st.session_state, 'provincia_seleccionada', '')
+                        
+                        # Obtener cultivos de este departamento
+                        cultivos_dept = df_referencia[df_referencia['Departamento'] == departamento]['Cultivo'].unique()
+                        
+                        # Iterar por cada cultivo
+                        for cultivo in sorted(cultivos_dept):
+                            cultivo_csv = mapeo_cultivos_csv.get(cultivo, cultivo)
+                            
+                            # Filtrar datos históricos
+                            filtro = (dfr['Provincia'] == provincia) & \
+                                    (dfr['Departamento'] == departamento) & \
+                                    (dfr['Cultivo'] == cultivo_csv)
+                            df_hist = dfr[filtro].copy()
+                            
+                            if not df_hist.empty and len(df_hist) >= 5:
+                                # Calcular percentiles para este cultivo/departamento
+                                rendimientos = df_hist['Rendimiento'].astype(float).values
+                                p10 = np.percentile(rendimientos, 10)
+                                p25 = np.percentile(rendimientos, 25)
+                                p75 = np.percentile(rendimientos, 75)
+                                p90 = np.percentile(rendimientos, 90)
+                                
+                                # Crear diccionario de campaña -> (rinde, escenario)
+                                datos_cultivo_dept = {}
+                                for _, row_hist in df_hist.iterrows():
+                                    rend = float(row_hist['Rendimiento']) / 1000
+                                    campaña = str(row_hist['Campaña']).strip()
+                                    
+                                    # Clasificar en escenario
+                                    if row_hist['Rendimiento'] <= p10:
+                                        escenario = 'Muy Bajo'
+                                    elif p10 < row_hist['Rendimiento'] <= p25:
+                                        escenario = 'Bajo'
+                                    elif p25 < row_hist['Rendimiento'] <= p75:
+                                        escenario = 'Normal'
+                                    elif p75 < row_hist['Rendimiento'] <= p90:
+                                        escenario = 'Alto'
+                                    else:
+                                        escenario = 'Muy Alto'
+                                    
+                                    datos_cultivo_dept[campaña] = {
+                                        'rinde': rend,
+                                        'escenario': escenario
+                                    }
+                                
+                                datos_completos.append(datos_cultivo_dept)
+                                # Crear nombre de columna como string: "Departamento - Cultivo"
+                                columnas_nombres.append(f"{departamento} - {cultivo}")
                             else:
-                                st.warning(f"No se puede determinar la provincia para {departamento}")
-                                continue
+                                datos_completos.append({})
+                                columnas_nombres.append(f"{departamento} - {cultivo}")
+                    
+                    # Obtener todas las campañas únicas
+                    todas_campañas = set()
+                    for datos in datos_completos:
+                        todas_campañas.update(datos.keys())
+                    
+                    # Filtrar campañas que tienen al menos un dato
+                    campañas_con_datos = []
+                    for campaña in todas_campañas:
+                        tiene_datos = any(campaña in datos for datos in datos_completos)
+                        if tiene_datos:
+                            campañas_con_datos.append(campaña)
+                    
+                    campañas_ordenadas = sorted(campañas_con_datos)
+                    
+                    # Crear DataFrame con nombres simples de columnas
+                    if campañas_ordenadas and columnas_nombres:
+                        # Crear matriz de datos (rindes)
+                        matriz_rindes = []
+                        matriz_escenarios = []
                         
-                        # Filtrar datos históricos para este departamento específico
-                        filtro = (dfr['Provincia'] == provincia) & \
-                                (dfr['Departamento'] == departamento) & \
-                                (dfr['Cultivo'] == cultivo_csv)
-                        df_hist = dfr[filtro].copy()
-                        
-                        if not df_hist.empty and len(df_hist) >= 5:
-                            # Convertir rendimientos a float y calcular percentiles
-                            rendimientos = df_hist['Rendimiento'].astype(float).values
+                        for campaña in campañas_ordenadas:
+                            fila_rindes = []
+                            fila_escenarios = []
                             
-                            p10 = np.percentile(rendimientos, 10)
-                            p25 = np.percentile(rendimientos, 25)
-                            p75 = np.percentile(rendimientos, 75)
-                            p90 = np.percentile(rendimientos, 90)
-                            
-                            # Crear lista de campañas con su escenario
-                            campañas_data = []
-                            for idx, row_hist in df_hist.iterrows():
-                                rend = float(row_hist['Rendimiento'])
-                                campaña = str(row_hist['Campaña'])
-                                
-                                # Clasificar en escenario
-                                if rend <= p10:
-                                    escenario = 'Muy Bajo'
-                                elif p10 < rend <= p25:
-                                    escenario = 'Bajo'
-                                elif p25 < rend <= p75:
-                                    escenario = 'Normal'
-                                elif p75 < rend <= p90:
-                                    escenario = 'Alto'
+                            for datos in datos_completos:
+                                if campaña in datos:
+                                    fila_rindes.append(datos[campaña]['rinde'])
+                                    fila_escenarios.append(datos[campaña]['escenario'])
                                 else:
-                                    escenario = 'Muy Alto'
-                                
-                                campañas_data.append({
-                                    'Campaña': campaña,
-                                    'Rendimiento (kg/ha)': int(rend),
-                                    'Rendimiento (tn/ha)': round(rend/1000, 2),
-                                    'Escenario': escenario
-                                })
+                                    fila_rindes.append(np.nan)
+                                    fila_escenarios.append(None)
                             
-                            # Crear DataFrame y ordenar cronológicamente
-                            df_campañas = pd.DataFrame(campañas_data)
-                            df_campañas = df_campañas.sort_values('Campaña')
-                            
-                            # Función para aplicar color de fondo según escenario
-                            def color_escenario(row):
-                                color = colores_escenarios.get(row['Escenario'], '#ffffff')
-                                return [f'background-color: {color}; color: black' if col != 'Escenario' 
-                                    else f'background-color: {color}; color: black; font-weight: bold' 
-                                    for col in row.index]
-                            
-                            # Aplicar estilo y mostrar
-                            styled_df = df_campañas.style.apply(color_escenario, axis=1).format({
-                                'Rendimiento (kg/ha)': '{:,.0f}',
-                                'Rendimiento (tn/ha)': '{:.2f}'
-                            })
-                            
-                            st.dataframe(styled_df, hide_index=True, use_container_width=True)
-                            
-                            # Resumen estadístico
-                            st.markdown("**Resumen por escenario:**")
-                            resumen_data = df_campañas.groupby('Escenario').agg({
-                                'Campaña': 'count',
-                                'Rendimiento (tn/ha)': ['min', 'max', 'mean']
-                            }).round(2)
-                            resumen_data.columns = ['Cantidad de años', 'Rinde mín (tn/ha)', 'Rinde máx (tn/ha)', 'Rinde prom (tn/ha)']
-                            
-                            # Ordenar por escenario
-                            orden_escenarios = ['Muy Bajo', 'Bajo', 'Normal', 'Alto', 'Muy Alto']
-                            resumen_data = resumen_data.reindex([e for e in orden_escenarios if e in resumen_data.index])
-                            
-                            st.dataframe(resumen_data, use_container_width=True)
-                            
-                        else:
-                            st.warning(f"No hay suficientes datos históricos para {cultivo} en {departamento}, {provincia}")
+                            matriz_rindes.append(fila_rindes)
+                            matriz_escenarios.append(fila_escenarios)
                         
-                        st.markdown("---")  # Separador entre departamentos
+                        # Crear DataFrame principal con columnas simples
+                        df_tabla = pd.DataFrame(
+                            matriz_rindes,
+                            index=campañas_ordenadas,
+                            columns=columnas_nombres
+                        )
+                        
+                        # Crear DataFrame auxiliar con escenarios
+                        df_escenarios = pd.DataFrame(
+                            matriz_escenarios,
+                            index=campañas_ordenadas,
+                            columns=columnas_nombres
+                        )
+                        
+                        # Función para aplicar colores según escenario
+                        def aplicar_colores(val, escenario):
+                            if pd.isna(val) or escenario is None:
+                                return 'background-color: #E0E0E0; color: gray'
+                            
+                            color = colores_escenarios.get(escenario, '#FFFFFF')
+                            texto_color = 'black' if escenario in ['Normal', 'Bajo', 'Alto'] else 'white'
+                            
+                            return f'background-color: {color}; color: {texto_color}; font-weight: bold'
+                        
+                        # Aplicar estilo
+                        def style_table(row):
+                            campaña = row.name
+                            idx = campañas_ordenadas.index(campaña)
+                            
+                            estilos = []
+                            for i in range(len(columnas_nombres)):
+                                val = row.iloc[i]
+                                escenario = df_escenarios.iloc[idx, i]
+                                estilos.append(aplicar_colores(val, escenario))
+                            
+                            return estilos
+                        
+                        styled_tabla = df_tabla.style.apply(style_table, axis=1).format(
+                            '{:.2f}',
+                            na_rep='-'
+                        )
+                        
+                        # Mostrar tabla
+                        st.dataframe(styled_tabla, use_container_width=True, height=600)
+                        
+                        # Leyenda
+                        st.markdown("---")
+                        st.markdown("**Leyenda de colores: Escenarios**")
+                        col1, col2, col3, col4, col5 = st.columns(5)
+                        
+                        with col1:
+                            st.markdown(f"<div style='background-color: {colores_escenarios['Muy Bajo']}; padding: 10px; border-radius: 5px; text-align: center; color: white; font-weight: bold'>Muy Bajo (≤P10)</div>", unsafe_allow_html=True)
+                        
+                        with col2:
+                            st.markdown(f"<div style='background-color: {colores_escenarios['Bajo']}; padding: 10px; border-radius: 5px; text-align: center; color: black; font-weight: bold'>Bajo (P10-P25)</div>", unsafe_allow_html=True)
+                        
+                        with col3:
+                            st.markdown(f"<div style='background-color: {colores_escenarios['Normal']}; padding: 10px; border-radius: 5px; text-align: center; color: black; font-weight: bold'>Normal (P25-P75)</div>", unsafe_allow_html=True)
+                        
+                        with col4:
+                            st.markdown(f"<div style='background-color: {colores_escenarios['Alto']}; padding: 10px; border-radius: 5px; text-align: center; color: white; font-weight: bold'>Alto (P75-P90)</div>", unsafe_allow_html=True)
+                        
+                        with col5:
+                            st.markdown(f"<div style='background-color: {colores_escenarios['Muy Alto']}; padding: 10px; border-radius: 5px; text-align: center; color: white; font-weight: bold'>Muy Alto (≥P90)</div>", unsafe_allow_html=True)
+                        
+                        # Estadísticas resumidas
+                        st.markdown("---")
+                        st.markdown("**📊 Estadísticas por Departamento y Cultivo:**")
+                        
+                        stats_data = []
+                        for col_name in columnas_nombres:
+                            col_data = df_tabla[col_name].dropna()
+                            escenarios_col = df_escenarios[col_name].dropna()
+                            
+                            if len(col_data) > 0:
+                                # Separar departamento y cultivo del nombre de columna
+                                partes = col_name.split(' - ')
+                                dept = partes[0] if len(partes) > 0 else col_name
+                                cultivo = partes[1] if len(partes) > 1 else ''
+                                
+                                stats_data.append({
+                                    'Departamento': dept,
+                                    'Cultivo': cultivo,
+                                    'Rinde Promedio': f"{col_data.mean():.2f} tn/ha",
+                                    'Rinde Mín': f"{col_data.min():.2f} tn/ha",
+                                    'Rinde Máx': f"{col_data.max():.2f} tn/ha",
+                                    'Campañas': len(col_data),
+                                    'Escenario más frecuente': escenarios_col.mode()[0] if len(escenarios_col.mode()) > 0 else '-'
+                                })
+                        
+                        df_stats = pd.DataFrame(stats_data)
+                        st.dataframe(df_stats, hide_index=True, use_container_width=True)
+                    else:
+                        st.warning("No hay suficientes datos históricos para mostrar la tabla")
+                else:
+                    st.warning("No hay datos del planteo para mostrar rindes históricos")
+
+        # Crear tabla comparativa
+        st.markdown("### 📊 Comparativa de Escenarios")
+        
+        # Calcular totales para cada escenario
+        escenarios_data = []
+        
+        for nombre_escenario, df_escenario in [
+            ("Muy Bajo (P10)", dfp_muy_bajo), 
+            ("Bajo (P10-P25)", dfp_bajo), 
+            ("Normal (P25-P75)", dfp_normal), 
+            ("Alto (P75-P90)", dfp_alto),
+            ("Muy Alto (P90+)", dfp_muy_alto)
+        ]:
+            if df_escenario is not None and not df_escenario.empty:
+                ingtotal_esc = df_escenario['Ingreso'].sum()
+                costtotal_esc = df_escenario['Costos directos'].sum()
+                gctotal_esc = df_escenario['Gastos comercialización'].sum()
+                mbtotal_esc = df_escenario['Margen bruto'].sum()
+                
+                if df1 is not None:
+                    arrend = st.session_state.df1[0]
+                    gas = st.session_state.df1[1]
+                    result_esc = int(mbtotal_esc)-int(arrend)-int(gas)
+                    result_net = (result_esc/ingtotal_esc)*100
+                else:
+                    arrend = 0
+                    gas = 0
+                    result_esc = mbtotal_esc
+                
+                escenarios_data.append({
+                    'Escenario': nombre_escenario,
+                    'Ingreso Total': ingtotal_esc,
+                    'Costos Directos': costtotal_esc,
+                    'Gastos Comercialización': gctotal_esc,
+                    'Margen Bruto': mbtotal_esc,
+                    'Arrendamiento': arrend,
+                    'Gastos Estructura': gas,
+                    'Resultado Final': result_esc,
+                    'Margen neto': result_net
+                })
+        
+        if escenarios_data:
+            df_comparativa = pd.DataFrame(escenarios_data)
+            
+            # Formatear la tabla
+            st.dataframe(df_comparativa.style.format({
+                'Ingreso Total': '${:,.0f}',
+                'Costos Directos': '${:,.0f}',
+                'Gastos Comercialización': '${:,.0f}',
+                'Margen Bruto': '${:,.0f}',
+                'Arrendamiento': '${:,.0f}',
+                'Gastos Estructura': '${:,.0f}',
+                'Resultado Final': '${:,.0f}',
+                'Margen neto': '{:.1f}%'
+            }),
+            hide_index=True)
 
                         
-        st.write(f"**Aclaraciones del cálculo:** Los rindes utilizados para la proyección corresponden a los promedios históricos por localidad para las últimas campañas (desde 2013/2014 a 2024/2025) segmentadas por percentiles para la determinación de escenarios. Los gastos de arrendamiento y estructura fueron estimados según datos proporcionados por SAGYP")
-        
         # Barras y gráficos en tres columnas
-        left, middle, right = st.columns(3)
+        left, right = st.columns(2)
         # Agrupar por Cultivo y Departamento
         df_grouped = df_referencia.groupby(['Cultivo', 'Departamento'])['Superficie (has)'].sum().reset_index()
 
@@ -1952,7 +2149,7 @@ def app5():
             values='Superficie (has)',
             color='Campos_clean',
             color_discrete_map=color_discrete_map,
-            title="Distribución: Tipo de Campo → Departamento"
+            title="Distribución: <br>Tipo de Campo → Localidad"
         )
 
         fig_sunburst.update_traces(
@@ -1961,7 +2158,7 @@ def app5():
         )
 
         fig_sunburst.update_layout(margin=dict(t=40, b=0))
-        middle.plotly_chart(fig_sunburst, use_container_width=True)
+        right.plotly_chart(fig_sunburst, use_container_width=True)
         
         # COLUMNA 3: Tabla Campaña Fina/Gruesa (MOVIDA AQUÍ)
         fig = go.Figure()
@@ -1987,17 +2184,34 @@ def app5():
         ))
 
         fig.update_layout(
-            barmode='group',
-            height=450,
-            title_text='Comparación Campaña Fina vs Gruesa',
-            title_font_size=18,
-            xaxis_title='',
-            yaxis_title='Monto ($)',
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            hovermode='x unified'
-        )
+                    barmode='group',
+                    height=450,
+                    # Configuración detallada del título
+                    title={
+                        'text': 'Comparación <br>Campaña Fina vs Gruesa',
+                        'y': 0.95,          # Lo sube un poco más (1 es el tope)
+                        'x': 0.5,           # Lo centra horizontalmente
+                        'xanchor': 'center',
+                        'yanchor': 'top',
+                        'font': dict(size=18)
+                    },
+                    # AJUSTE DE MÁRGENES: El valor 't' le da aire al título
+                    margin=dict(t=120, b=50, l=50, r=50), 
+                    
+                    xaxis_title='',
+                    yaxis_title='Monto ($)',
+                    # Ajustamos la leyenda para que no choque con el título centrado
+                    legend=dict(
+                        orientation="h", 
+                        yanchor="bottom", 
+                        y=1.02, 
+                        xanchor="center", # Centrada también para armonía visual
+                        x=0.5
+                    ),
+                    hovermode='x unified'
+                )
 
-        right.plotly_chart(fig, use_container_width=True)
+        left.plotly_chart(fig, use_container_width=True)
         
         # AGREGAR PESTAÑAS CON TODOS LOS ESCENARIOS AL FINAL
         st.subheader("📊 Detalle por Escenario de Rendimiento")

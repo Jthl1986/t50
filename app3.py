@@ -104,26 +104,26 @@ def app():
     categoria = hacienda.Categoría 
     promedio = hacienda.Promedio
     tabla = pd.DataFrame({'categoria':categoria,'promedio':promedio}) #creo un dataframe con categoria y promedio
-    ternero=tabla[0:5] 
-    novillito=tabla[5:7]
-    ternera=tabla[7:11]
-    vaquillona=tabla[11:14]
-    vaca=tabla[22:23]  
-    fecha=  "Semana: 15/12/2025 al 19/12/2025" #(tabla[25:26].values)[0][0] #el predeterminado es 25:26 
-    ternero160=int(ternero.promedio[0][2:6])
-    ternero180=int(ternero.promedio[1][2:6])
-    ternero200=int(ternero.promedio[2][2:6])
-    ternero230=int(ternero.promedio[3][2:6])
-    novillo260=int(novillito.promedio[5][2:6])
-    novillo300=int(novillito.promedio[6][2:6])
-    ternera150=int(ternera.promedio[7][2:6])
-    ternera170=int(ternera.promedio[8][2:6])
-    ternera190=int(ternera.promedio[9][2:6])
-    ternera210=int(ternera.promedio[10][2:6])
-    vaquillona250=int(vaquillona.promedio[11][2:6])
-    vaquillona290=int(vaquillona.promedio[12][2:6])
-    vaquillona291=int(vaquillona.promedio[13][2:6])
-    vacas= 738704 #int(vaca.promedio[22][2:8])
+    ternero=tabla[0:6] 
+    novillito=tabla[7:11]
+    ternera=tabla[13:18]
+    vaquillona=tabla[18:21]
+    vaca=tabla[36:37]  
+    fecha= "Semana: 26/01/2026 al 02/01/2026" #(tabla[37:38].values)[0][0] #el predeterminado es 25:26 #"Semana: 09/06/2025 al 13/06/2025"
+    ternero160=int(ternero.promedio[2][2:6])
+    ternero180=int(ternero.promedio[3][2:6])
+    ternero200=int(ternero.promedio[4][2:6])
+    ternero230=int(ternero.promedio[5][2:6])
+    novillo260=int(novillito.promedio[7][2:6])
+    novillo300=int(novillito.promedio[8][2:6])
+    ternera150=int(ternera.promedio[14][2:6])
+    ternera170=int(ternera.promedio[15][2:6])
+    ternera190=int(ternera.promedio[16][2:6])
+    ternera210=int(ternera.promedio[17][2:6])
+    vaquillona250=int(vaquillona.promedio[18][2:6])
+    vaquillona290=int(vaquillona.promedio[18][2:6])
+    vaquillona291=int(vaquillona.promedio[18][2:6])
+    vacas= 982634 #int(vaca.promedio[22][2:8])
     def constructor():
         def valores():
             if tipo == 'Ternero             ' and peso < 160:

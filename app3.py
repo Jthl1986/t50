@@ -2201,7 +2201,7 @@ def app5():
 
         fig_sunburst.update_traces(
             textinfo='label+percent parent',
-            textfont=dict(size=12)
+            textfont=dict(size=12, color='black')
         )
 
         fig_sunburst.update_layout(margin=dict(t=40, b=0))

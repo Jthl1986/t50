@@ -85,7 +85,7 @@ valormaxc = 122000 #valor maximo cosecha
 valors = 60000 #valor referencia siembra
 
 #CARGA RINDES HISTÓRICOS
-url = "https://raw.githubusercontent.com/Jthl1986/T1/main/Estimaciones.csv"
+url = "https://raw.githubusercontent.com/Jthl1986/T1/main/Estimaciones11.csv"
 dfr = pd.read_csv(url, encoding='ISO-8859-1', sep=';')
 
 
@@ -462,6 +462,7 @@ def app4():
       value = api_data['venta']
       dol = value
     else:
+       dol = 1401  # Valor por defecto en caso de fallo
        print("Failed to retrieve data")
     
     #dol = float(1401) #En caso de fallas sacar el numero del principio de la línea
@@ -646,7 +647,7 @@ def app4():
         valor = row['valor']
     
         # Almacenar la variable y su valor en el diccionario
-        variables_dict[variable] = valor
+        variables_dict[variable] = valor    
     
     # Definir cada variable en el espacio de nombres global
     for variable, valor in variables_dict.items():
@@ -877,20 +878,36 @@ def app4():
     }
     
     # Función para obtener el gasto estructura para campo arrendado de un cultivo en una región
-    def obtener_arrend(region, tipo, cantidad):
-        # Verificar si la región y el cultivo existen en el diccionario
+    def obtener_arrend(region, tipo, cantidad, qq_ha_override=None):
+        """
+        Calcula el arrendamiento con opción de sobrescribir qq/ha
+        qq_ha_override: si se proporciona, usa este valor en lugar del predeterminado
+        """
         if region in arrend_por_region_cultivo and tipo in arrend_por_region_cultivo[region]:
-            return cantidad * arrend_por_region_cultivo[region][tipo]
+            arrend_base = arrend_por_region_cultivo[region][tipo]
+            
+            # Si hay un valor personalizado de qq/ha, recalcular el arrendamiento
+            if qq_ha_override is not None:
+                # Calcular qq/ha original
+                precio_soja = variables_dict.get('psoja1', 300)  # Precio base de soja
+                qq_ha_original = arrend_base / precio_soja * 10
+                
+                # Calcular nuevo arrendamiento con qq/ha personalizado
+                arrend_modificado = (qq_ha_override * precio_soja) / 10
+                return cantidad * arrend_modificado
+            
+            return cantidad * arrend_base
         else:
-            return "Región o cultivo no encontrados en la lista"
+            return 0
     
     if 'arrenda' not in st.session_state:
         st.session_state.arrenda = []
         
-    def arrendamiento():
-        resultado = obtener_arrend(region, tipo, cantidad)
+    def arrendamiento(qq_ha_custom=None):
+        resultado = obtener_arrend(region, tipo, cantidad, qq_ha_custom)
         resultado = round(resultado * dol, 2)
         st.session_state.arrenda.append(resultado)
+        return resultado
 
     def arrendamiento_inf():
         if propio == "Propios":
@@ -905,21 +922,77 @@ def app4():
             return obtener_gesa(region, tipo, 1)
     
     def gc_inf():
-        return gasto*precio*rinde
+        # Usar rinde promedio si rinde aún no está definido
+        rinde_calc = rindeprom if 'rinde' not in locals() else rinde
+        return gasto*precio*rinde_calc
     
+    # Inicializar porcentaje de aparcería por defecto
+    if 'porcentaje_aparceria' not in st.session_state:
+        st.session_state.porcentaje_aparceria = 60
+    
+    # Inicializar diccionario de qq/ha personalizados por línea
+    if 'qq_ha_personalizados' not in st.session_state:
+        st.session_state.qq_ha_personalizados = {}
+    
+    # Contador de líneas cargadas para generar keys únicos
+    if 'contador_lineas' not in st.session_state:
+        st.session_state.contador_lineas = 0
 
-    if 'aparceria_value' not in st.session_state:
-        st.session_state.aparceria_value = 0
-############FORMULARIO DE CARGA        
-    center.write("Completar:")
+############FORMULARIO DE CARGA SIMPLIFICADO      
+    center.write("**Cargar cultivo:**")
 
-        # SELECTBOX FUERA DEL FORM (actualización instantánea)
+    # SELECTBOX DE CULTIVO FUERA DEL FORM (actualización instantánea)
     st.session_state.tipo_cultivo_form = center.selectbox(
         'Tipo de cultivo: ', 
         ["Soja 1ra", "Soja 2da", "Trigo", "Maíz", "Girasol", "Sorgo", "Cebada"],
         key="selectbox_cultivo_instant"
     )
     tipo = st.session_state.tipo_cultivo_form
+    
+    # SELECTBOX DE TIPO DE CAMPO FUERA DEL FORM (actualización instantánea)
+    propio = center.selectbox('Tipo de campo: ', ["Propios","Arrendados","Aparcería"], key="tipo_campo_instant")
+    
+    # AHORA SÍ podemos calcular valores que dependen de region y tipo
+    rindeprom = round(float(obtener_rind(region, tipo)),2)
+    precio = float(obtener_precio(tipo))
+    costo = float(obtener_costo(region,tipo))
+    gasto = float(obtener_gasvar(region,tipo))
+    
+    # Calcular qq/ha estimado para arrendados (fuera del form)
+    qq_ha_custom = None
+    if propio == "Arrendados":
+        arrend_base = arrend_por_region_cultivo.get(region, {}).get(tipo, 0)
+        precio_soja = variables_dict.get('psoja1', 300)
+        qq_ha_estimado = arrend_base / precio_soja * 10
+        
+        center.markdown(f"**Arrendamiento estimado: {qq_ha_estimado:.1f} qq/ha**")
+        
+        modificar_qq = center.checkbox("✏️ Ajustar qq/ha para esta línea", key="modificar_qq_instant")
+        
+        if modificar_qq:
+            qq_ha_custom = center.number_input(
+                "qq/ha personalizado:",
+                min_value=1.0,
+                max_value=50.0,
+                value=qq_ha_estimado,
+                step=0.5,
+                format="%.1f",
+                key="qq_ha_custom_instant"
+            )
+    
+    # MOSTRAR AJUSTE DE APARCERÍA FUERA DEL FORM
+    if propio == "Aparcería":
+        aparceria_input = center.number_input(
+            "% Aparcería (default 60%):", 
+            min_value=1, 
+            max_value=100, 
+            value=st.session_state.porcentaje_aparceria,
+            step=1,
+            key="aparceria_input_instant"
+        )
+        aparceria = aparceria_input / 100
+    else:
+        aparceria = st.session_state.porcentaje_aparceria / 100
     
     ### PARA ELIMINAR LOS BORDES DEL FORMULARIO
     st.markdown("""
@@ -937,14 +1010,15 @@ def app4():
     """, unsafe_allow_html=True)
     
     form = center.form("template_form") 
-    propio = form.selectbox('Campos: ', ["Propios","Arrendados","Aparcería"])   
-    cantidad = form.number_input("Superficie (has): ", step=1)   
+    cantidad = form.number_input("Superficie (has): ", step=1)
+    
+    submit = form.form_submit_button("✅ Ingresar cultivo")
 
-    on = left.toggle("Rinde automático", value=True)
+    # El rinde siempre es automático ahora
+    on = True
 
-#PRUEBA    
-        
-    with left.expander("Análisis de Rendimientos"):
+#ANÁLISIS DE RENDIMIENTOS    
+    with left.expander("📊 Análisis de Rendimientos"):
         cultivo_csv = mapeo_cultivos_csv.get(st.session_state.tipo_cultivo_form, st.session_state.tipo_cultivo_form)
         # Filtrar el DataFrame según las selecciones del usuario
         filtro_provincia = (dfr['Provincia'] == st.session_state.provincia_seleccionada)
@@ -1005,44 +1079,16 @@ def app4():
             st.table(escenarios_data)
         else:
             st.warning("Se requieren al menos 5 campañas para calcular los escenarios")
-            
-    if not on:
-        rinde = form.number_input("Rendimiento informado (en tn)")
-
-    submit = form.form_submit_button("Ingresar")
+    
+    # Calcular rinde de indiferencia usando el promedio de la región
+    rindeinf = round(float((costo + arrendamiento_inf() + ges_inf() + (gasto*precio*rindeprom))/ precio),2)
      
     # Inicializar lista de departamentos cargados si no existe
     if 'departamentos_cargados' not in st.session_state:
         st.session_state.departamentos_cargados = []
 
-    aparceria = st.session_state.aparceria_value / 100 if st.session_state.aparceria_value > 0 else 0
-
-    # Modificar la sección donde se hace submit para guardar el departamento
-    if submit:
-        if propio == "Aparcería" and aparceria == 0:
-            st.warning("Falta completar porcentaje de aparcería")
-        else:
-            # AGREGAR ESTA LÍNEA PARA GUARDAR EL DEPARTAMENTO
-            if st.session_state.departamento_seleccionado not in st.session_state.departamentos_cargados:
-                st.session_state.departamentos_cargados.append(st.session_state.departamento_seleccionado)
-
-    # CORRECCIÓN AQUÍ:
-    if on:
-        # Obtener el diccionario con los 3 rindes
-        rindes = rindeautomatico(tipo)  # Devuelve {'bajo': X, 'normal': Y, 'alto': Z}
-        # Usar el rinde normal para cálculos principales
-        rinde = float(rindes['normal'])
-        
-    right.write("Cuadro gastos (se completa solo una vez):")
-    form2 = right.form("template_form2") 
-    aparceria_input = form2.number_input("Porcentaje de aparcería (si falta el dato, sugerido 60%)", step=1)
-    aparceria = aparceria_input/100
-
-    rindeprom = round(float(obtener_rind(region, tipo)),2)
-    precio = float(obtener_precio(tipo))
-    costo = float(obtener_costo(region,tipo))
-    gasto = float(obtener_gasvar(region,tipo))
-    rindeinf = round(float((costo + arrendamiento_inf() + ges_inf() + gc_inf())/ precio),2)
+    # Inicializar precio de soja para cálculos de arrendamiento
+    precio_soja = variables_dict.get('psoja1', 300)
 
     # Imprimir la lista de datos        
     def lista(rinde_actual):
@@ -1093,44 +1139,50 @@ def app4():
         if propio == "Aparcería" and aparceria == 0:
             st.warning("Falta completar porcentaje de aparcería")
         else:
-            # AGREGAR ESTA LÍNEA PARA GUARDAR EL DEPARTAMENTO
+            # Incrementar contador de líneas
+            st.session_state.contador_lineas += 1
+            
+            # AGREGAR DEPARTAMENTO
             if st.session_state.departamento_seleccionado not in st.session_state.departamentos_cargados:
                 st.session_state.departamentos_cargados.append(st.session_state.departamento_seleccionado)
             
-            if on:
-                if 'rindes' not in locals() and 'rindes' not in globals():
-                    rindes = rindeautomatico(tipo)
-                
-                # Generar datos para los 5 escenarios
-                datos_muy_bajo = lista(float(rindes['muy_bajo']))
-                datos_bajo = lista(float(rindes['bajo']))
-                datos_normal = lista(float(rindes['normal']))
-                datos_alto = lista(float(rindes['alto']))
-                datos_muy_alto = lista(float(rindes['muy_alto']))
-                
-                # Agregar a los DataFrames correspondientes - AHORA CON PROVINCIA
-                dfo_muy_bajo = pd.DataFrame([datos_muy_bajo], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
-                dfo_bajo = pd.DataFrame([datos_bajo], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
-                dfo_normal = pd.DataFrame([datos_normal], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
-                dfo_alto = pd.DataFrame([datos_alto], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
-                dfo_muy_alto = pd.DataFrame([datos_muy_alto], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
-                
-                st.session_state.dfp_muy_bajo = pd.concat([st.session_state.dfp_muy_bajo, dfo_muy_bajo])
-                st.session_state.dfp_bajo = pd.concat([st.session_state.dfp_bajo, dfo_bajo])
-                st.session_state.dfp_normal = pd.concat([st.session_state.dfp_normal, dfo_normal])
-                st.session_state.dfp_alto = pd.concat([st.session_state.dfp_alto, dfo_alto])
-                st.session_state.dfp_muy_alto = pd.concat([st.session_state.dfp_muy_alto, dfo_muy_alto])
-                
-            else:
-                # Para rinde manual, usar el mismo valor en los 5 escenarios
-                datos_manual = lista(float(rinde))
-                dfo_manual = pd.DataFrame([datos_manual], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
-                
-                st.session_state.dfp_muy_bajo = pd.concat([st.session_state.dfp_muy_bajo, dfo_manual])
-                st.session_state.dfp_bajo = pd.concat([st.session_state.dfp_bajo, dfo_manual])
-                st.session_state.dfp_normal = pd.concat([st.session_state.dfp_normal, dfo_manual])
-                st.session_state.dfp_alto = pd.concat([st.session_state.dfp_alto, dfo_manual])
-                st.session_state.dfp_muy_alto = pd.concat([st.session_state.dfp_muy_alto, dfo_manual])
+            # Siempre usar rindes automáticos
+            rindes = rindeautomatico(tipo)
+            
+            # Generar datos para los 5 escenarios
+            datos_muy_bajo = lista(float(rindes['muy_bajo']))
+            datos_bajo = lista(float(rindes['bajo']))
+            datos_normal = lista(float(rindes['normal']))
+            datos_alto = lista(float(rindes['alto']))
+            datos_muy_alto = lista(float(rindes['muy_alto']))
+            
+            # Agregar a los DataFrames correspondientes
+            dfo_muy_bajo = pd.DataFrame([datos_muy_bajo], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
+            dfo_bajo = pd.DataFrame([datos_bajo], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
+            dfo_normal = pd.DataFrame([datos_normal], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
+            dfo_alto = pd.DataFrame([datos_alto], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
+            dfo_muy_alto = pd.DataFrame([datos_muy_alto], columns=('Región                    ', 'Provincia', 'Departamento', 'Campos     ','Cultivo', 'Superficie (has)', 'Rinde', 'Ingreso', 'Costos directos','Gastos comercialización', 'Margen bruto', 'RindeRegion', 'RindeIndif'))
+            
+            st.session_state.dfp_muy_bajo = pd.concat([st.session_state.dfp_muy_bajo, dfo_muy_bajo])
+            st.session_state.dfp_bajo = pd.concat([st.session_state.dfp_bajo, dfo_bajo])
+            st.session_state.dfp_normal = pd.concat([st.session_state.dfp_normal, dfo_normal])
+            st.session_state.dfp_alto = pd.concat([st.session_state.dfp_alto, dfo_alto])
+            st.session_state.dfp_muy_alto = pd.concat([st.session_state.dfp_muy_alto, dfo_muy_alto])
+            
+            # ACTUALIZAR GASTOS AUTOMÁTICAMENTE
+            if propio == "Propios":
+                gastos_estructura1()
+            elif propio == "Arrendados":
+                # Guardar el qq/ha personalizado si existe
+                if qq_ha_custom is not None:
+                    linea_key = f"{st.session_state.contador_lineas}_{region}_{tipo}"
+                    st.session_state.qq_ha_personalizados[linea_key] = qq_ha_custom
+                arrendamiento(qq_ha_custom)
+                gastos_estructura2()
+            elif propio == "Aparcería":
+                # Actualizar el porcentaje global si cambió
+                st.session_state.porcentaje_aparceria = int(aparceria * 100)
+                gastos_estructura2()
 
         
     def borra1():
@@ -1162,6 +1214,10 @@ def app4():
             st.session_state.dfp_alto = st.session_state.dfp_alto.iloc[:-1]
             st.session_state.dfp_muy_alto = st.session_state.dfp_muy_alto.iloc[:-1]
             
+            # Decrementar contador de líneas
+            if st.session_state.contador_lineas > 0:
+                st.session_state.contador_lineas -= 1
+            
             # Actualizar los gastos según el tipo de campo
             if ultimo_tipo_campo == "Propios":
                 borra1()
@@ -1174,10 +1230,120 @@ def app4():
         else:
             st.warning("No hay filas para borrar")
 
-    # BOTÓN BORRAR ÚLTIMA FILA 
-    delete_last_row = st.button("Borrar última fila")
-    if delete_last_row:
-        borrar_ultima_fila_completa()  # Usa la nueva función que borra los 3 DataFrames
+    # MOSTRAR RESUMEN AUTOMÁTICO EN ANCHO COMPLETO
+    if st.session_state.dfp_normal is not None and not st.session_state.dfp_normal.empty:
+        st.markdown("---")
+        st.markdown("### 📊 Resumen del Planteo")
+        
+        heca_arrendados = st.session_state.dfp_normal.loc[st.session_state.dfp_normal['Campos     '] == 'Arrendados', 'Superficie (has)'].sum()
+        hecp_propios = st.session_state.dfp_normal.loc[st.session_state.dfp_normal['Campos     '] == 'Propios', 'Superficie (has)'].sum()
+        hecp_aparceria = st.session_state.dfp_normal.loc[st.session_state.dfp_normal['Campos     '] == 'Aparcería', 'Superficie (has)'].sum()
+        
+        gastos = sum(st.session_state.gespr) + sum(st.session_state.gesar)
+        arrenda_resultante = sum(st.session_state.arrenda)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total hectáreas", f"{heca_arrendados + hecp_propios + hecp_aparceria:.0f} has")
+        col2.metric("Gastos estructura", f"${gastos:,.0f}")
+        col3.metric("Arrendamientos", f"${arrenda_resultante:,.0f}")
+        col4.metric("Total gastos fijos", f"${gastos + arrenda_resultante:,.0f}")
+    
+    # FUNCIONALIDAD: Borrar filas específicas
+    if not st.session_state.dfp_normal.empty:
+        with st.expander("🎯 Eliminar filas específicas"):
+            st.write("Selecciona las filas que deseas eliminar:")
+            
+            # Crear una copia del dataframe con índice visible para el usuario
+            df_display = st.session_state.dfp_normal.reset_index(drop=True).copy()
+            df_display.insert(0, 'Nº', range(1, len(df_display) + 1))
+            
+            # Mostrar tabla con información clave
+            df_seleccion = df_display[['Nº', 'Departamento', 'Cultivo', 'Campos     ', 'Superficie (has)', 'Rinde']].copy()
+            
+            st.dataframe(df_seleccion, hide_index=True)
+            
+            # Input para seleccionar números de fila
+            filas_a_borrar = st.multiselect(
+                "Selecciona el número de fila(s) a eliminar:",
+                options=list(range(1, len(df_display) + 1)),
+                format_func=lambda x: f"Fila {x}: {df_seleccion.iloc[x-1]['Cultivo']} - {df_seleccion.iloc[x-1]['Departamento']} ({df_seleccion.iloc[x-1]['Superficie (has)']} has)"
+            )
+            
+            col1, col2 = st.columns([1, 3])
+            
+            if col1.button("❌ Eliminar seleccionadas", type="primary", key="btn_eliminar_especificas"):
+                if filas_a_borrar:
+                    # Convertir números de fila (1-indexed) a índices (0-indexed)
+                    indices_a_borrar = [x - 1 for x in filas_a_borrar]
+                    
+                    # Resetear índices antes de operar para asegurar índices 0, 1, 2, ...
+                    st.session_state.dfp_muy_bajo = st.session_state.dfp_muy_bajo.reset_index(drop=True)
+                    st.session_state.dfp_bajo = st.session_state.dfp_bajo.reset_index(drop=True)
+                    st.session_state.dfp_normal = st.session_state.dfp_normal.reset_index(drop=True)
+                    st.session_state.dfp_alto = st.session_state.dfp_alto.reset_index(drop=True)
+                    st.session_state.dfp_muy_alto = st.session_state.dfp_muy_alto.reset_index(drop=True)
+                    
+                    # Obtener información de las filas a borrar ANTES de eliminarlas
+                    tipos_campo_borrados = []
+                    for idx in indices_a_borrar:
+                        tipo_campo = st.session_state.dfp_normal.iloc[idx]['Campos     '].strip()
+                        tipos_campo_borrados.append(tipo_campo)
+                    
+                    # Crear máscara booleana: True para mantener, False para eliminar
+                    mask = [i not in indices_a_borrar for i in range(len(st.session_state.dfp_normal))]
+                    
+                    # Aplicar máscara a todos los DataFrames
+                    st.session_state.dfp_muy_bajo = st.session_state.dfp_muy_bajo[mask].reset_index(drop=True)
+                    st.session_state.dfp_bajo = st.session_state.dfp_bajo[mask].reset_index(drop=True)
+                    st.session_state.dfp_normal = st.session_state.dfp_normal[mask].reset_index(drop=True)
+                    st.session_state.dfp_alto = st.session_state.dfp_alto[mask].reset_index(drop=True)
+                    st.session_state.dfp_muy_alto = st.session_state.dfp_muy_alto[mask].reset_index(drop=True)
+                    
+                    # Actualizar gastos según tipo de campo
+                    for tipo_campo in tipos_campo_borrados:
+                        if tipo_campo == "Propios":
+                            borra1()
+                        elif tipo_campo == "Arrendados":
+                            borra2()
+                        elif tipo_campo == "Aparcería":
+                            borra3()
+                        
+                        # Decrementar contador
+                        if st.session_state.contador_lineas > 0:
+                            st.session_state.contador_lineas -= 1
+                    
+                    # Marcar que se realizó una eliminación exitosa
+                    st.session_state.ultima_eliminacion = len(filas_a_borrar)
+                else:
+                    st.warning("⚠️ No has seleccionado ninguna fila para eliminar")
+            
+            # Mostrar mensaje de éxito si hubo eliminación reciente
+            if hasattr(st.session_state, 'ultima_eliminacion') and st.session_state.ultima_eliminacion > 0:
+                st.success(f"✓ {st.session_state.ultima_eliminacion} fila(s) eliminada(s) correctamente")
+                st.session_state.ultima_eliminacion = 0  # Reset
+            
+            if filas_a_borrar:
+                col2.info(f"📝 {len(filas_a_borrar)} fila(s) seleccionada(s)")
+
+
+    # SECCIÓN DE CONFIGURACIÓN GLOBAL EN EL SIDEBAR
+    with right:
+        st.markdown("---")
+        st.markdown("### ⚙️ Configuración Global")
+        
+        # Mostrar configuración actual de aparcería
+        nuevo_pct_aparceria = st.number_input(
+            "% Aparcería por defecto:",
+            min_value=1,
+            max_value=100,
+            value=st.session_state.porcentaje_aparceria,
+            step=1,
+            help="Este porcentaje se aplicará a nuevos campos en aparcería"
+        )
+        
+        if nuevo_pct_aparceria != st.session_state.porcentaje_aparceria:
+            st.session_state.porcentaje_aparceria = nuevo_pct_aparceria
+            st.info(f"✓ Porcentaje de aparcería actualizado a {nuevo_pct_aparceria}%")
 
     # Crear pestañas para los 5 escenarios
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📉 Muy Bajo", "📊 Bajo", "⚖️ Normal", "📈 Alto", "🚀 Muy Alto"])
@@ -1304,7 +1470,8 @@ def app4():
                         st.markdown(f"- % Gastos comercialización: {gasto_actual*100:.1f}%")
                         
                         if row['Campos     '].strip() == "Aparcería":
-                            st.markdown(f"- % Aparcería: {aparceria*100:.0f}%")
+                            aparceria_local = st.session_state.porcentaje_aparceria / 100
+                            st.markdown(f"- % Aparcería: {aparceria_local*100:.0f}%")
                             st.markdown("*(En aparcería, ingresos y costos se comparten según porcentaje)*")
                     
                     st.divider()
@@ -1314,20 +1481,22 @@ def app4():
                     
                     # Cálculo de ingresos
                     if row['Campos     '].strip() == "Aparcería":
+                        aparceria_local = st.session_state.porcentaje_aparceria / 100
                         ingreso_base = precio_actual * dol * row['Rinde'] * row['Superficie (has)']
-                        ingreso_final = ingreso_base * aparceria
+                        ingreso_final = ingreso_base * aparceria_local
                         st.markdown(f"1. **Ingreso base**: u$s {precio_actual:,.2f}/tn × {dol} × {row['Rinde']} tn/ha × {row['Superficie (has)']} ha = ${ingreso_base:,.0f}")
-                        st.markdown(f"2. **Ajuste por aparcería**: ${ingreso_base:,.0f} × {aparceria*100:.0f}% = **${ingreso_final:,.0f}**")
+                        st.markdown(f"2. **Ajuste por aparcería**: ${ingreso_base:,.0f} × {aparceria_local*100:.0f}% = **${ingreso_final:,.0f}**")
                     else:
                         ingreso_final = precio_actual * dol * row['Rinde'] * row['Superficie (has)']
                         st.markdown(f"1. **Ingreso**: u$s {precio_actual:,.2f}/tn × {dol} × {row['Rinde']} tn/ha × {row['Superficie (has)']} ha = **${ingreso_final:,.0f}**")
                     
                     # Cálculo de costos directos
                     if row['Campos     '].strip() == "Aparcería":
+                        aparceria_local = st.session_state.porcentaje_aparceria / 100
                         costo_base = costo_actual * dol * row['Superficie (has)']
-                        costo_final = costo_base * aparceria
+                        costo_final = costo_base * aparceria_local
                         st.markdown(f"3. **Costo directo base**: u$s {costo_actual:,.2f}/ha × {dol} × {row['Superficie (has)']} ha = ${costo_base:,.0f}")
-                        st.markdown(f"4. **Ajuste por aparcería**: ${costo_base:,.0f} × {aparceria*100:.0f}% = **${costo_final:,.0f}**")
+                        st.markdown(f"4. **Ajuste por aparcería**: ${costo_base:,.0f} × {aparceria_local*100:.0f}% = **${costo_final:,.0f}**")
                     else:
                         costo_final = costo_actual * dol * row['Superficie (has)']
                         st.markdown(f"2. **Costo directo**: u$s {costo_actual:,.2f}/ha × {dol} × {row['Superficie (has)']} ha = **${costo_final:,.0f}**")
@@ -1346,47 +1515,30 @@ def app4():
                     st.markdown(f"- Con rinde bajo ({rinde_bajo:.2f} tn/ha): Margen ≈ **${precio_actual * dol * rinde_bajo * row['Superficie (has)'] - costo_final - (gasto_actual * precio_actual * dol * rinde_bajo * row['Superficie (has)']):,.0f}**")
                     st.markdown(f"- Con rinde alto ({rinde_alto:.2f} tn/ha): Margen ≈ **${precio_actual * dol * rinde_alto * row['Superficie (has)'] - costo_final - (gasto_actual * precio_actual * dol * rinde_alto * row['Superficie (has)']):,.0f}**")              
                
-        if submit:
-            if propio == "Propios":
-                gastos_estructura1()
-            else:
-                gastos_estructura2()
-        
-        if st.session_state.dfp_normal is not None:
-            heca_arrendados = st.session_state.dfp_normal.loc[st.session_state.dfp_normal['Campos     '] == 'Arrendados', 'Superficie (has)'].sum()
-            hecp_propios = st.session_state.dfp_normal.loc[st.session_state.dfp_normal['Campos     '] == 'Propios', 'Superficie (has)'].sum()
-            hecp_aparceria = st.session_state.dfp_normal.loc[st.session_state.dfp_normal['Campos     '] == 'Aparcería', 'Superficie (has)'].sum()
-            heca = heca_arrendados + hecp_aparceria
-            hecp = hecp_propios
-            nro_hectareas = heca + hecp
-    
-            if nro_hectareas > 0:
-                gastos = sum(st.session_state.gespr) + sum(st.session_state.gesar)
-                gestimado = gastos
-                            
-         
-    if submit:
-        if propio == "Arrendados":
-            arrendamiento()
-    
-    arrenda_resultante = sum(st.session_state.arrenda)
-    gestimado_str = "${:,.0f}".format(gestimado)
-    arrend_str = "${:,.0f}".format(arrenda_resultante )
-    arrendamiento = form2.number_input(f"Gastos de arrendamiento - Estimador: {arrend_str} - {arrend_por_region_cultivo[region][tipo] / psoja1 * 10:.1f} qq/ha", step=1)
-    gast = form2.number_input(f"Gastos de estructura - Estimador: {gestimado_str}", step=1)
-    submit2 = form2.form_submit_button("Ingresar")
-    
-    if submit2:
-        st.session_state.aparceria_value = aparceria_input
-        st.session_state.df1 = [arrendamiento, gast, aparceria]
-        
-        # AGREGAR ESTAS LÍNEAS:
-        st.session_state.dol = dol  # Guardar valor del dólar
-        st.session_state.region = region  # Guardar región seleccionada
-        
-        # Guardar las funciones de obtención como diccionarios
-        st.session_state.gasvar_dict = gasvar_por_region_cultivo
-    
+    # Actualizar automáticamente los gastos y preparar df1
+    if st.session_state.dfp_normal is not None and not st.session_state.dfp_normal.empty:
+        heca_arrendados = st.session_state.dfp_normal.loc[st.session_state.dfp_normal['Campos     '] == 'Arrendados', 'Superficie (has)'].sum()
+        hecp_propios = st.session_state.dfp_normal.loc[st.session_state.dfp_normal['Campos     '] == 'Propios', 'Superficie (has)'].sum()
+        hecp_aparceria = st.session_state.dfp_normal.loc[st.session_state.dfp_normal['Campos     '] == 'Aparcería', 'Superficie (has)'].sum()
+        heca = heca_arrendados + hecp_aparceria
+        hecp = hecp_propios
+        nro_hectareas = heca + hecp
+
+        if nro_hectareas > 0:
+            gastos = sum(st.session_state.gespr) + sum(st.session_state.gesar)
+            gestimado = gastos
+            arrenda_resultante = sum(st.session_state.arrenda)
+            
+            # Actualizar df1 automáticamente
+            st.session_state.df1 = [arrenda_resultante, gestimado, st.session_state.porcentaje_aparceria / 100]
+            
+            # Guardar valores adicionales necesarios
+            st.session_state.dol = dol
+            st.session_state.region = region
+            st.session_state.gasvar_dict = gasvar_por_region_cultivo
+
+
+
 
 def app9():
     st.title("🌄 Sitios de utilidad")
@@ -1575,6 +1727,9 @@ def app5():
         col3.metric(label="Costo directo", value=costototal)
         col4.metric(label="Tenencia de granos", value= granos)
 
+        # CÓDIGO MODIFICADO PARA EL HEATMAP CON RANGOS
+# Este código reemplaza la sección del heatmap en app5
+
         # MOSTRAR TABLA COMPARATIVA DE LOS 5 ESCENARIOS
         if hay_escenarios:
             # AGREGAR HEATMAP CON RESULTADO FINAL POR ESCENARIO DE RINDE Y PRECIO
@@ -1591,16 +1746,31 @@ def app5():
                 else:
                     return 0.05  # 5% por defecto
 
+            # Cargar datos históricos para calcular percentiles
+            url = "https://raw.githubusercontent.com/Jthl1986/T1/main/Estimaciones8.csv"
+            dfr = pd.read_csv(url, encoding='ISO-8859-1', sep=',')
+            
+            # Mapeo de cultivos
+            mapeo_cultivos_csv = {
+                "Trigo": "Trigo total",
+                "Maíz": "Maíz",
+                "Soja 1ra": "Soja 1ra",
+                "Soja 2da": "Soja 2da",
+                "Girasol": "Girasol",
+                "Sorgo": "Sorgo",
+                "Cebada": "Cebada"
+            }
+
             # Definir escenarios de precio (variación de ±15% respecto a precio base)
             escenarios_precio = {
                 'Bajo (-15%)': {
-                    'Trigo': 190 * 0.85,
-                    'Soja 1ra': 300 * 0.85,
-                    'Soja 2da': 300 * 0.85,
-                    'Maíz': 175 * 0.85,
-                    'Cebada': 165 * 0.85,
-                    'Girasol': 330 * 0.85,
-                    'Sorgo': 160 * 0.85
+                    'Trigo': 190 * 0.92,
+                    'Soja 1ra': 300 * 0.92,
+                    'Soja 2da': 300 * 0.92,
+                    'Maíz': 175 * 0.92,
+                    'Cebada': 165 * 0.92,
+                    'Girasol': 330 * 0.92,
+                    'Sorgo': 160 * 0.92
                 },
                 'Normal': {
                     'Trigo': 190,
@@ -1612,137 +1782,193 @@ def app5():
                     'Sorgo': 160
                 },
                 'Alto (+15%)': {
-                    'Trigo': 190 * 1.15,
-                    'Soja 1ra': 300 * 1.15,
-                    'Soja 2da': 300 * 1.15,
-                    'Maíz': 175 * 1.15,
-                    'Cebada': 165 * 1.15,
-                    'Girasol': 330 * 1.15,
-                    'Sorgo': 160 * 1.15
+                    'Trigo': 190 * 1.08,
+                    'Soja 1ra': 300 * 1.08,
+                    'Soja 2da': 300 * 1.08,
+                    'Maíz': 175 * 1.08,
+                    'Cebada': 165 * 1.08,
+                    'Girasol': 330 * 1.08,
+                    'Sorgo': 160 * 1.08
                 }
             }
 
-            # Función para recalcular resultado con nuevos precios
-            def calcular_resultado_con_precio(df_escenario, precios_dict, arrend, gas):
-                """
-                Recalcula el resultado final de un escenario con nuevos precios
-                Retorna: (resultado_final_millones, ingreso_total, margen_rentabilidad%)
-                """
-                ingreso_total = 0
-                costo_total = 0
-                gc_total = 0
+            # Función para calcular percentiles de rinde por cultivo/departamento
+            def calcular_percentiles_rinde(cultivo, departamento, provincia):
+                """Calcula los percentiles de rinde para un cultivo/departamento específico"""
+                cultivo_csv = mapeo_cultivos_csv.get(cultivo, cultivo)
                 
-                for idx, row in df_escenario.iterrows():
+                filtro = (dfr['Provincia'] == provincia) & \
+                        (dfr['Departamento'] == departamento) & \
+                        (dfr['Cultivo'] == cultivo_csv)
+                df_hist = dfr[filtro]
+                
+                if len(df_hist) >= 5:
+                    rendimientos = df_hist['Rendimiento'].astype(float).values
+                    return {
+                        'p10': np.percentile(rendimientos, 10) / 1000,
+                        'p25': np.percentile(rendimientos, 25) / 1000,
+                        'p75': np.percentile(rendimientos, 75) / 1000,
+                        'p90': np.percentile(rendimientos, 90) / 1000,
+                        'min': rendimientos.min() / 1000,
+                        'max': rendimientos.max() / 1000
+                    }
+                return None
+
+            # Función para recalcular resultado con precios y RANGO de rindes
+            def calcular_resultado_con_rango(df_base, precios_dict, arrend, gas, rinde_min_factor, rinde_max_factor):
+                """
+                Calcula resultado mínimo y máximo para un escenario de precio con rango de rindes
+                rinde_min_factor/max_factor: multiplicadores para calcular rinde mínimo y máximo del escenario
+                Retorna: (resultado_min, resultado_max, margen_min, margen_max)
+                """
+                # Calcular con rinde mínimo
+                ingreso_min = 0
+                costo_min = 0
+                gc_min = 0
+                
+                # Calcular con rinde máximo
+                ingreso_max = 0
+                costo_max = 0
+                gc_max = 0
+                
+                for idx, row in df_base.iterrows():
                     cultivo = row['Cultivo']
+                    departamento = row['Departamento']
+                    provincia = row.get('Provincia', '')
                     superficie = row['Superficie (has)']
-                    rinde = row['Rinde']
                     
-                    # Obtener nuevo precio
+                    # Obtener percentiles para este cultivo/departamento
+                    percentiles = calcular_percentiles_rinde(cultivo, departamento, provincia)
+                    
+                    if percentiles:
+                        rinde_base_min = percentiles.get(rinde_min_factor, row['Rinde'])
+                        rinde_base_max = percentiles.get(rinde_max_factor, row['Rinde'])
+                    else:
+                        # Si no hay datos históricos, usar variación del 10%
+                        rinde_base_min = row['Rinde'] * 0.9
+                        rinde_base_max = row['Rinde'] * 1.1
+                    
                     precio_nuevo = precios_dict.get(cultivo, 0)
                     
-                    # Recalcular con aparcería si aplica
+                    # Calcular con aparcería si aplica
                     if row['Campos     '].strip() == "Aparcería":
                         aparceria = st.session_state.df1[2] if len(st.session_state.df1) > 2 else 0.6
-                        ingreso = precio_nuevo * dol * rinde * superficie * aparceria
-                        costo = row['Costos directos']  # Ya está ajustado por aparcería
+                        ing_min = precio_nuevo * dol * rinde_base_min * superficie * aparceria
+                        ing_max = precio_nuevo * dol * rinde_base_max * superficie * aparceria
+                        costo = row['Costos directos']
                     else:
-                        ingreso = precio_nuevo * dol * rinde * superficie
+                        ing_min = precio_nuevo * dol * rinde_base_min * superficie
+                        ing_max = precio_nuevo * dol * rinde_base_max * superficie
                         costo = row['Costos directos']
                     
-                    # Gastos de comercialización (usar el % ya calculado)
+                    # Gastos de comercialización
                     gasto_pct = obtener_gasvar_local(cultivo, row)
-                    gc = gasto_pct * ingreso
+                    gc_m = gasto_pct * ing_min
+                    gc_M = gasto_pct * ing_max
                     
-                    ingreso_total += ingreso
-                    costo_total += costo
-                    gc_total += gc
+                    ingreso_min += ing_min
+                    ingreso_max += ing_max
+                    costo_min += costo
+                    costo_max += costo
+                    gc_min += gc_m
+                    gc_max += gc_M
                 
-                margen_bruto_total = ingreso_total - costo_total - gc_total
+                # Calcular resultados
+                mb_min = ingreso_min - costo_min - gc_min
+                mb_max = ingreso_max - costo_max - gc_max
                 
-                # Descontar arrendamiento y gastos de estructura
-                resultado_final = margen_bruto_total - arrend - gas
+                resultado_min = (mb_min - arrend - gas) / 1_000_000
+                resultado_max = (mb_max - arrend - gas) / 1_000_000
                 
-                # Calcular margen de rentabilidad (resultado/ingreso * 100)
-                margen_rentabilidad = (resultado_final / ingreso_total * 100) if ingreso_total > 0 else 0
+                margen_min = ((mb_min - arrend - gas) / ingreso_min * 100) if ingreso_min > 0 else 0
+                margen_max = ((mb_max - arrend - gas) / ingreso_max * 100) if ingreso_max > 0 else 0
                 
-                return resultado_final / 1_000_000, ingreso_total / 1_000_000, margen_rentabilidad
+                return resultado_min, resultado_max, margen_min, margen_max
 
-            # Preparar datos para el heatmap (5 rindes × 3 precios)
-            escenarios_rinde = [
-                ("Muy Bajo", dfp_muy_bajo),
-                ("Bajo", dfp_bajo),
-                ("Normal", dfp_normal),
-                ("Alto", dfp_alto),
-                ("Muy Alto", dfp_muy_alto)
-            ]
+            # Definir los rangos de percentiles para cada escenario de rinde
+            rangos_rinde = {
+                "Muy Bajo": ('min', 'p10'),
+                "Bajo": ('p10', 'p25'),
+                "Normal": ('p25', 'p75'),
+                "Alto": ('p75', 'p90'),
+                "Muy Alto": ('p90', 'max')
+            }
 
-            heatmap_data = []
+            escenarios_rinde_nombres = ["Muy Bajo", "Bajo", "Normal", "Alto", "Muy Alto"]
+
+            heatmap_data_min = []
+            heatmap_data_max = []
+            margenes_data_min = []
+            margenes_data_max = []
             hover_data = []
 
-            # CAMBIO: Iterar primero por precios (filas) y luego por rindes (columnas)
+            # Iterar por precios (filas) y rindes (columnas)
             for nombre_precio, precios in escenarios_precio.items():
-                fila_valores = []
+                fila_valores_min = []
+                fila_valores_max = []
+                fila_margenes_min = []
+                fila_margenes_max = []
                 fila_hover = []
                 
-                for nombre_rinde, df_rinde in escenarios_rinde:
-                    if df_rinde is None or df_rinde.empty:
+                for nombre_rinde in escenarios_rinde_nombres:
+                    if dfp_normal is None or dfp_normal.empty:
                         continue
                     
-                    # Calcular resultado para esta combinación
-                    resultado_millones, ingreso_millones, margen_rentabilidad = calcular_resultado_con_precio(
-                        df_rinde, 
-                        precios, 
-                        arrend, 
-                        gas
+                    rinde_min_key, rinde_max_key = rangos_rinde[nombre_rinde]
+                    
+                    # Calcular resultado con rango de rindes
+                    resultado_min, resultado_max, margen_min, margen_max = calcular_resultado_con_rango(
+                        dfp_normal,
+                        precios,
+                        arrend,
+                        gas,
+                        rinde_min_key,
+                        rinde_max_key
                     )
                     
-                    fila_valores.append(resultado_millones)
+                    # Usar el promedio para el color del heatmap
+                    resultado_promedio = (resultado_min + resultado_max) / 2
+                    
+                    fila_valores_min.append(resultado_min)
+                    fila_valores_max.append(resultado_max)
+                    fila_margenes_min.append(margen_min)
+                    fila_margenes_max.append(margen_max)
                     
                     # Crear texto hover detallado
                     hover_text = f"<b>Precio: {nombre_precio}</b><br>"
                     hover_text += f"<b>Rinde: {nombre_rinde}</b><br><br>"
-                    hover_text += f"<b>Resultado Final:</b> ${resultado_millones:,.2f}M<br>"
-                    hover_text += f"<b>Margen Rentabilidad:</b> {margen_rentabilidad:+.1f}%<br>"
-                    hover_text += f"<b>Ingreso Total:</b> ${ingreso_millones:,.2f}M<br><br>"
+                    hover_text += f"<b>Resultado Mín:</b> ${resultado_min:,.2f}M ({margen_min:+.1f}%)<br>"
+                    hover_text += f"<b>Resultado Máx:</b> ${resultado_max:,.2f}M ({margen_max:+.1f}%)<br>"
+                    hover_text += f"<b>Rango:</b> ${resultado_max - resultado_min:,.2f}M<br><br>"
                     hover_text += "<b>Precios aplicados:</b><br>"
                     for cultivo, precio in precios.items():
-                        hover_text += f"  • {cultivo}: u$s{precio:.0f}/tn<br>"
+                        if cultivo in dfp_normal['Cultivo'].values:
+                            hover_text += f"  • {cultivo}: u$s{precio:.0f}/tn<br>"
                     
                     fila_hover.append(hover_text)
                 
-                heatmap_data.append(fila_valores)
+                heatmap_data_min.append(fila_valores_min)
+                heatmap_data_max.append(fila_valores_max)
+                margenes_data_min.append(fila_margenes_min)
+                margenes_data_max.append(fila_margenes_max)
                 hover_data.append(fila_hover)
 
-            # Crear DataFrame para el heatmap (TRANSPUESTO)
+            # Crear DataFrame para el heatmap (usar promedio para colores)
+            heatmap_data_promedio = [
+                [(min_val + max_val) / 2 for min_val, max_val in zip(fila_min, fila_max)]
+                for fila_min, fila_max in zip(heatmap_data_min, heatmap_data_max)
+            ]
 
             df_heatmap_matriz = pd.DataFrame(
-                heatmap_data,
-                index=list(escenarios_precio.keys()),  # Precios en filas (eje Y)
-                columns=[nombre for nombre, _ in escenarios_rinde if _ is not None and not _.empty]  # Rindes en columnas (eje X)
-            )
-
-            # Calcular también los márgenes para mostrar en el heatmap
-            margenes_data = []
-            for nombre_precio, precios in escenarios_precio.items():
-                fila_margenes = []
-                for nombre_rinde, df_rinde in escenarios_rinde:
-                    if df_rinde is None or df_rinde.empty:
-                        continue
-                    _, _, margen = calcular_resultado_con_precio(df_rinde, precios, arrend, gas)
-                    fila_margenes.append(margen)
-                margenes_data.append(fila_margenes)
-
-            df_margenes = pd.DataFrame(
-                margenes_data,
-                index=df_heatmap_matriz.index,
-                columns=df_heatmap_matriz.columns
+                heatmap_data_promedio,
+                index=list(escenarios_precio.keys()),
+                columns=escenarios_rinde_nombres
             )
 
             # CREAR ESCALA DE COLORES CENTRADA EN CERO
             valores = df_heatmap_matriz.values.flatten()
             valor_max = np.max(np.abs(valores))
 
-            # Escala de colores divergente centrada en cero (Opción 4 - Minimalista Elegante)
             colorscale = [
                 [0.0, '#C62828'],    # Rojo intenso (muy negativo)
                 [0.25, '#E57373'],   # Rojo claro
@@ -1756,15 +1982,17 @@ def app5():
                 [1.0, '#388E3C']     # Verde oscuro (muy positivo)
             ]
 
-            # Crear anotaciones para mostrar resultado y margen en cada celda
+            # Crear anotaciones para mostrar RANGOS en cada celda
             annotations = []
             for i, y_label in enumerate(df_heatmap_matriz.index):
                 for j, x_label in enumerate(df_heatmap_matriz.columns):
-                    resultado = df_heatmap_matriz.iloc[i, j]
-                    margen = df_margenes.iloc[i, j]
+                    resultado_min = heatmap_data_min[i][j]
+                    resultado_max = heatmap_data_max[i][j]
+                    margen_min = margenes_data_min[i][j]
+                    margen_max = margenes_data_max[i][j]
                     
-                    # Texto a mostrar: resultado en la primera línea, margen en la segunda
-                    texto = f"<b>${resultado:,.1f}MM</b><br>{margen:+.1f}%"
+                    # Texto a mostrar: rango de resultado y rango de margen
+                    texto = f"<b>${resultado_min:.0f}-{resultado_max:.0f}MM</b><br>{margen_min:+.0f}% - {margen_max:+.0f}%"
                     
                     annotations.append(
                         dict(
@@ -1773,7 +2001,7 @@ def app5():
                             text=texto,
                             showarrow=False,
                             font=dict(
-                                size=13,
+                                size=11,
                                 color='black',
                                 family='Arial, sans-serif'
                             ),
@@ -1785,15 +2013,15 @@ def app5():
             # Crear el heatmap con plotly
             fig_heatmap = go.Figure(data=go.Heatmap(
                 z=df_heatmap_matriz.values,
-                x=df_heatmap_matriz.columns,  # Rindes en X
-                y=df_heatmap_matriz.index,     # Precios en Y
+                x=df_heatmap_matriz.columns,
+                y=df_heatmap_matriz.index,
                 colorscale=colorscale,
-                zmid=0,  # Centrar la escala en cero
+                zmid=0,
                 hovertext=hover_data,
                 hoverinfo='text',
                 showscale=True,
                 colorbar=dict(
-                    title="Resultado<br>($MM)",
+                    title="Resultado<br>Promedio<br>($MM)",
                     tickformat="$,.0f",
                     ticksuffix="MM",
                     len=0.7
@@ -1801,18 +2029,18 @@ def app5():
             ))
 
             fig_heatmap.update_layout(
-                annotations=annotations,  # Agregar las anotaciones
-                xaxis_title="<b>Escenario de Rinde</b>",  # CAMBIO: Ahora es Rinde
-                yaxis_title="<b>Escenario de Precio</b>",  # CAMBIO: Ahora es Precio
+                annotations=annotations,
+                xaxis_title="<b>Escenario de Rinde</b>",
+                yaxis_title="<b>Escenario de Precio</b>",
                 xaxis=dict(
-                    side='top',  # Etiquetas de rinde arriba
+                    side='top',
                     tickfont=dict(size=12, color='black'),
                     title_standoff=10
                 ),
                 yaxis=dict(
                     tickfont=dict(size=12, color='black')
                 ),
-                height=400,  # Reducido porque ahora hay menos filas
+                height=400,
                 font=dict(size=12),
                 margin=dict(t=50, b=0, l=100, r=100)
             )
@@ -1823,46 +2051,43 @@ def app5():
             st.markdown("---")
             col1, col2, col3 = st.columns(3)
 
-            # Encontrar índices del mejor y peor resultado
-            mejor_idx = np.unravel_index(df_heatmap_matriz.values.argmax(), df_heatmap_matriz.shape)
-            peor_idx = np.unravel_index(df_heatmap_matriz.values.argmin(), df_heatmap_matriz.shape)
+            # Encontrar mejor y peor escenario (usando valores máximos y mínimos)
+            mejor_resultado = max([max(fila) for fila in heatmap_data_max])
+            peor_resultado = min([min(fila) for fila in heatmap_data_min])
+            
+            # Encontrar índices
+            for i in range(len(heatmap_data_max)):
+                for j in range(len(heatmap_data_max[i])):
+                    if heatmap_data_max[i][j] == mejor_resultado:
+                        mejor_margen = margenes_data_max[i][j]
+                    if heatmap_data_min[i][j] == peor_resultado:
+                        peor_margen = margenes_data_min[i][j]
 
-            # Extraer los valores de Resultado Final (MM)
-            mejor_valor = df_heatmap_matriz.values[mejor_idx]
-            peor_valor = df_heatmap_matriz.values[peor_idx]
+            # Contar escenarios positivos
+            escenarios_positivos = sum(1 for fila_min in heatmap_data_min for val in fila_min if val > 0)
+            total_escenarios = len(heatmap_data_min) * len(heatmap_data_min[0])
 
-            # Extraer los márgenes correspondientes de la matriz df_margenes
-            # Usamos los mismos índices (mejor_idx/peor_idx) ya que ambas tablas tienen la misma forma
-            mejor_margen = df_margenes.values[mejor_idx]
-            peor_margen = df_margenes.values[peor_idx]
-
-            # Cálculos para la tercera métrica
-            valores_positivos = df_heatmap_matriz.values[df_heatmap_matriz.values > 0]
-            escenarios_positivos = len(valores_positivos)
-            total_escenarios = df_heatmap_matriz.size
-
-            # Mostrar Métricas
-            # En 'delta' ponemos el margen de rentabilidad formateado
             col1.metric(
                 label="Mejor Escenario", 
-                value=f"${mejor_valor:,.1f}MM", 
+                value=f"${mejor_resultado:,.1f}MM", 
                 delta=f"{mejor_margen:+.1f}% Margen"
             )
 
             col2.metric(
                 label="Peor Escenario", 
-                value=f"${peor_valor:,.1f}MM", 
+                value=f"${peor_resultado:,.1f}MM", 
                 delta=f"{peor_margen:+.1f}% Margen",
-                delta_color="normal" # "normal" mantiene el rojo si es negativo
+                delta_color="normal"
             )
 
             col3.metric(
                 label="Escenarios Positivos", 
                 value=f"{escenarios_positivos}/{total_escenarios}", 
                 delta=f"{escenarios_positivos/total_escenarios*100:.0f}% del total",
-                delta_color="off" # Desactiva el color verde/rojo para esta métrica
+                delta_color="off"
             )
-            
+
+                    
             mapeo_cultivos_csv = {
             "Trigo": "Trigo total",
             "Maíz": "Maíz",
@@ -1898,7 +2123,7 @@ def app5():
                 }
                 
                 # Cargar datos históricos
-                url = "https://raw.githubusercontent.com/Jthl1986/T1/main/Estimaciones8.csv"
+                url = "https://raw.githubusercontent.com/Jthl1986/T1/main/Estimaciones11.csv"
                 dfr = pd.read_csv(url, encoding='ISO-8859-1', sep=',')
                 
                 # Obtener todos los departamentos únicos del planteo
@@ -2100,6 +2325,117 @@ def app5():
                 else:
                     st.warning("No hay datos del planteo para mostrar rindes históricos")
 
+    # CÓDIGO A AGREGAR EN APP5 DESPUÉS DEL EXPANDER DE RINDES HISTÓRICOS
+
+        # AGREGAR TABLA DE FUTUROS Y RANGOS DE PRECIOS
+        st.markdown("---")
+        st.markdown("### 💰 Futuros Utilizados y Rangos de Precios por Escenario")
+
+        # Definir los meses de los futuros para cada cultivo
+        meses_futuros = {
+            'Trigo': 'ENERO',
+            'Cebada': 'ENERO',
+            'Girasol': 'FEBRERO',
+            'Maíz': 'ABRIL',
+            'Sorgo': 'ABRIL',
+            'Soja 1ra': 'MAYO',
+            'Soja 2da': 'MAYO'
+        }
+
+        # Mapeo de cultivos a variables de precio (de app4)
+        mapeo_cultivos_variables = {
+            "Soja 1ra": "psoja1",
+            "Soja 2da": "psoja2",
+            "Trigo": "ptrigo",
+            "Maíz": "pmaiz",
+            "Girasol": "pgirasol",
+            "Sorgo": "psorgo",
+            "Cebada": "pcebada"
+        }
+
+        # Obtener cultivos únicos del planteo cargado
+        if df_referencia is not None and not df_referencia.empty:
+            cultivos_cargados = df_referencia['Cultivo'].unique()
+            
+            # Obtener precios base desde las variables cargadas en app4
+            # Las variables están en st.session_state desde app4
+            variables_dict = {}
+            if hasattr(st.session_state, 'dfp_normal'):
+                # Intentar obtener las variables desde session_state
+                # O leerlas nuevamente desde el CSV
+                try:
+                    df_variables = pd.read_csv('https://raw.githubusercontent.com/Jthl1986/T1/main/variablessep25vf1.csv')
+                    for _, row in df_variables.iterrows():
+                        variables_dict[row['variable']] = row['valor']
+                except:
+                    # Valores por defecto si no se pueden cargar
+                    variables_dict = {
+                        'psoja1': 300,
+                        'psoja2': 300,
+                        'ptrigo': 190,
+                        'pmaiz': 175,
+                        'pgirasol': 330,
+                        'psorgo': 160,
+                        'pcebada': 165
+                    }
+            
+            # Obtener precios base desde las variables
+            precios_base = {}
+            for cultivo in cultivos_cargados:
+                variable_precio = mapeo_cultivos_variables.get(cultivo)
+                if variable_precio:
+                    precios_base[cultivo] = variables_dict.get(variable_precio, 0)
+            
+            # Precios de referencia (los que antes eran "base" en el código original)
+            precios_referencia = {
+                'Trigo': 190,
+                'Cebada': 165,
+                'Girasol': 330,
+                'Maíz': 180,
+                'Sorgo': 160,
+                'Soja 1ra': 315,
+                'Soja 2da': 315
+            }
+            
+            # Crear datos de la tabla solo para cultivos cargados
+            datos_futuros = []
+            for cultivo in sorted(cultivos_cargados):
+                precio_base = precios_base.get(cultivo, 0)
+                precio_bajo = precio_base * 0.92
+                precio_alto = precio_base * 1.08
+                
+                datos_futuros.append({
+                    'Cultivo': cultivo,
+                    'Futuro': meses_futuros.get(cultivo, '-'),
+                    'Precio Futuro Actual (u$s/tn)': f"${precio_base:.0f}",
+                    'Escenario Bajo': f"≤ ${precio_bajo:.0f}",
+                    'Escenario Normal': f"${precio_bajo:.0f} - ${precio_alto:.0f}",
+                    'Escenario Alto': f"≥ ${precio_alto:.0f}"
+                })
+            
+            if datos_futuros:
+                df_futuros = pd.DataFrame(datos_futuros)
+                
+                # Función para aplicar estilo a la tabla
+                def highlight_precio_actual(row):
+                    # Resaltar la columna "Precio Futuro Actual" en verde
+                    styles = [''] * len(row)
+                    styles[2] = 'background-color: #4CAF50; color: white; font-weight: bold'  # Precio Futuro Actual
+                    return styles
+                
+                # Aplicar estilo
+                styled_futuros = df_futuros.style.apply(highlight_precio_actual, axis=1)
+                
+                # Mostrar tabla
+                st.dataframe(styled_futuros, hide_index=True, use_container_width=True)
+                
+                # Texto explicativo simple
+                st.markdown("*Los precios futuros actuales corresponden a los valores utilizados en los cálculos del heatmap*")
+            else:
+                st.warning("No hay cultivos cargados en el planteo")
+        else:
+            st.warning("No hay datos del planteo para mostrar los futuros")
+
         # Crear tabla comparativa
         st.markdown("### 📊 Comparativa de escenarios con las cotizaciones actuales de granos")
         
@@ -2258,7 +2594,7 @@ def app5():
                     hovermode='x unified'
                 )
 
-        left.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
         
         # AGREGAR PESTAÑAS CON TODOS LOS ESCENARIOS AL FINAL
         st.subheader("📊 Detalle por Escenario de Rendimiento")

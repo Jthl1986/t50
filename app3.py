@@ -2101,7 +2101,7 @@ def app5():
                     st.warning("No hay datos del planteo para mostrar rindes históricos")
 
         # Crear tabla comparativa
-        st.markdown("### 📊 Comparativa de Escenarios")
+        st.markdown("### 📊 Comparativa de escenarios con las cotizaciones actuales de granos")
         
         # Calcular totales para cada escenario
         escenarios_data = []

@@ -226,10 +226,10 @@ fecha1 = "11/04/2024" #pizarra_data["fecha"]#  #   Sacar fecha y numeral y tabul
 
 # Asignar los valores a las variables con los nombres personalizados
 pptrigo = 258800 #valores_rosario["pptrigo"]    
-ppsoja = 430500#valores_rosario["ppsoja"]     
-ppmaiz = 251300#valores_rosario["ppmaiz"]     
-ppgirasol = 535225#valores_rosario["ppgirasol"] 
-ppsorgo = 257450#valores_rosario["ppsorgo"]     
+ppsoja = 430500 #valores_rosario["ppsoja"]     
+ppmaiz = 251300 #valores_rosario["ppmaiz"]     
+ppgirasol = 535225 #valores_rosario["ppgirasol"] 
+ppsorgo = 257450 #valores_rosario["ppsorgo"]     
 
 
 def app1():

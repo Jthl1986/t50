@@ -109,7 +109,7 @@ def app():
     ternera=tabla[13:18]
     vaquillona=tabla[18:21]
     vaca=tabla[36:37]  
-    fecha= "Semana: 18/05/2026 al 26/05/2026" #(tabla[37:38].values)[0][0] #el predeterminado es 25:26 #
+    fecha= "Semana: 26/01/2026 al 02/01/2026" #(tabla[37:38].values)[0][0] #el predeterminado es 25:26 #"Semana: 09/06/2025 al 13/06/2025"
     ternero160=int(ternero.promedio[2][2:6])
     ternero180=int(ternero.promedio[3][2:6])
     ternero200=int(ternero.promedio[4][2:6])

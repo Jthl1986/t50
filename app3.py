@@ -109,7 +109,7 @@ def app():
     ternera=tabla[13:18]
     vaquillona=tabla[18:21]
     vaca=tabla[36:37]  
-    fecha= "Semana: 26/01/2026 al 02/01/2026" #(tabla[37:38].values)[0][0] #el predeterminado es 25:26 #"Semana: 09/06/2025 al 13/06/2025"
+    fecha= (tabla[37:38].values)[0][0] #el predeterminado es 25:26 #"Semana: 09/06/2025 al 13/06/2025"
     ternero160=int(ternero.promedio[2][2:6])
     ternero180=int(ternero.promedio[3][2:6])
     ternero200=int(ternero.promedio[4][2:6])
@@ -123,7 +123,7 @@ def app():
     vaquillona250=int(vaquillona.promedio[18][2:6])
     vaquillona290=int(vaquillona.promedio[18][2:6])
     vaquillona291=int(vaquillona.promedio[18][2:6])
-    vacas= 982634 #int(vaca.promedio[22][2:8])
+    vacas= 1600000 #int(vaca.promedio[22][2:8])
     def constructor():
         def valores():
             if tipo == 'Ternero             ' and peso < 160:

@@ -2749,6 +2749,6 @@ with st.sidebar:
     Desarrollado por JSantacecilia  y JSaborido
     para Equipo Agro 
     """, unsafe_allow_html=True)
-    st.caption("Datos del Informe Septiembre 2025 SAGYP")
+    st.caption("Datos del Informe Marzo 2026 SAGYP")
     abrir_google_maps()
     #st_lottie(lottie_book, speed=0.5, height=50, key="initial")

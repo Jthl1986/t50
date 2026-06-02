@@ -636,7 +636,7 @@ def app4():
                 }
       
 #LECTURA VARIABLES
-    df = pd.read_csv('https://raw.githubusercontent.com/Jthl1986/T1/main/variablessep25vf1.csv')
+    df = pd.read_csv('https://raw.githubusercontent.com/Jthl1986/T1/main/variablesmar26.csv') #variablessep25vf1.csv
 
     # Crear un diccionario para almacenar las variables y valores
     variables_dict = {}

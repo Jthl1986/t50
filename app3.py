@@ -1662,7 +1662,7 @@ def app5():
         df_gruesa = pd.DataFrame()
     
     if df_referencia is not None:
-        st.subheader("Planteo productivo - Campaña 2025/2026")
+        st.subheader("Planteo productivo - Campaña 2026/2027")
                        
         # CALCULOS PRINCIPALES (usando escenario normal o dfp original)
         ingtotal = df_referencia['Ingreso'].sum()

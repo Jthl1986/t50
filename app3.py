@@ -636,7 +636,7 @@ def app4():
                 }
       
 #LECTURA VARIABLES
-    df = pd.read_csv('https://raw.githubusercontent.com/Jthl1986/T1/main/variables_jun26.csv') #variablessep25vf1.csv
+    df = pd.read_csv('https://raw.githubusercontent.com/Jthl1986/T1/main/variablesjun26.csv') #variablessep25vf1.csv
 
     # Crear un diccionario para almacenar las variables y valores
     variables_dict = {}
@@ -2364,7 +2364,7 @@ def app5():
                 # Intentar obtener las variables desde session_state
                 # O leerlas nuevamente desde el CSV
                 try:
-                    df_variables = pd.read_csv('https://raw.githubusercontent.com/Jthl1986/T1/main/variables_jun26.csv')
+                    df_variables = pd.read_csv('https://raw.githubusercontent.com/Jthl1986/T1/main/variablesjun26.csv')
                     for _, row in df_variables.iterrows():
                         variables_dict[row['variable']] = row['valor']
                 except:

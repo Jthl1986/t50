@@ -109,20 +109,20 @@ def app():
     ternera=tabla[13:18]
     vaquillona=tabla[18:21]
     vaca=tabla[36:37]  
-    fecha= "Semana: 18/05/2026 al 26/05/2026" #(tabla[37:38].values)[0][0] #el predeterminado es 25:26 #"Semana: 09/06/2025 al 13/06/2025"
-    ternero160=int(ternero.promedio[2][2:6])
-    ternero180=int(ternero.promedio[3][2:6])
-    ternero200=int(ternero.promedio[4][2:6])
-    ternero230=int(ternero.promedio[5][2:6])
-    novillo260=int(novillito.promedio[7][2:6])
-    novillo300=int(novillito.promedio[8][2:6])
-    ternera150=int(ternera.promedio[14][2:6])
-    ternera170=int(ternera.promedio[15][2:6])
-    ternera190=int(ternera.promedio[16][2:6])
-    ternera210=int(ternera.promedio[17][2:6])
-    vaquillona250=int(vaquillona.promedio[18][2:6])
-    vaquillona290=int(vaquillona.promedio[18][2:6])
-    vaquillona291=int(vaquillona.promedio[18][2:6])
+    fecha= "Semana: 14/09/2026 al 21/09/2026" #(tabla[37:38].values)[0][0] #el predeterminado es 25:26 #"Semana: 09/06/2025 al 13/06/2025"
+    ternero160=6400#int(ternero.promedio[2][2:6])
+    ternero180=6400#int(ternero.promedio[3][2:6])
+    ternero200=6400#int(ternero.promedio[4][2:6])
+    ternero230=6400#int(ternero.promedio[5][2:6])
+    novillo260=4570#int(novillito.promedio[7][2:6])
+    novillo300=4570#int(novillito.promedio[8][2:6])
+    ternera150=5870#int(ternera.promedio[14][2:6])
+    ternera170=5870#int(ternera.promedio[15][2:6])
+    ternera190=5870#int(ternera.promedio[16][2:6])
+    ternera210=5870#int(ternera.promedio[17][2:6])
+    vaquillona250=4680#int(vaquillona.promedio[18][2:6])
+    vaquillona290=4680#int(vaquillona.promedio[18][2:6])
+    vaquillona291=4680#int(vaquillona.promedio[18][2:6])
     vacas= 1600000 #int(vaca.promedio[22][2:8])
     def constructor():
         def valores():
